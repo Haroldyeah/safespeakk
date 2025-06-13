@@ -30,6 +30,7 @@ CREATE TABLE users (
     role ENUM('student', 'admin') NOT NULL,
     student_id VARCHAR(50),
     school_id INT,
+    id_photo_path VARCHAR(500),
     status ENUM('active', 'inactive') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL

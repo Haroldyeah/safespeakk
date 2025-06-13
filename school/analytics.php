@@ -226,7 +226,7 @@ require_once '../includes/header.php';
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Report Status Distribution</h5>
+                    <h5 class="mb-0">Student Report Status Distribution</h5>
                 </div>
                 <div class="card-body">
                     <canvas id="statusChart" height="300"></canvas>
@@ -234,11 +234,11 @@ require_once '../includes/header.php';
             </div>
         </div>
 
-        <!-- Monthly Trends Chart -->
+        <!-- Monthly Submission Trends Chart -->
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Monthly Submission Trends</h5>
+                    <h5 class="mb-0">Monthly Report Submissions</h5>
                 </div>
                 <div class="card-body">
                     <canvas id="trendsChart" height="300"></canvas>
@@ -247,32 +247,13 @@ require_once '../includes/header.php';
         </div>
     </div>
 
-    <!-- Grade Distribution and Top Students -->
+    <!-- Student Reports Summary -->
     <div class="row mb-4">
-        <!-- Grade Distribution -->
+        <!-- Students with Reports -->
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Grade Distribution</h5>
-                </div>
-                <div class="card-body">
-                    <?php if (!empty($gradeDistribution)): ?>
-                        <canvas id="gradeChart" height="300"></canvas>
-                    <?php else: ?>
-                        <div class="text-center py-4">
-                            <i class="fas fa-chart-bar fa-2x text-muted mb-2"></i>
-                            <p class="text-muted">No graded reports in selected period</p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-
-        <!-- Top Performing Students -->
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Top Performing Students</h5>
+                    <h5 class="mb-0">Students with Submitted Reports</h5>
                 </div>
                 <div class="card-body">
                     <?php if (!empty($topStudents)): ?>
@@ -280,30 +261,29 @@ require_once '../includes/header.php';
                             <table class="table table-sm">
                                 <thead>
                                     <tr>
-                                        <th>Student</th>
-                                        <th>Reports</th>
-                                        <th>Approved</th>
-                                        <th>Avg Grade</th>
+                                        <th>Student Name</th>
+                                        <th>Student ID</th>
+                                        <th>Reports Submitted</th>
+                                        <th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php foreach ($topStudents as $student): ?>
                                         <tr>
                                             <td>
-                                                <small>
-                                                    <strong><?php echo htmlspecialchars($student['first_name'] . ' ' . $student['last_name']); ?></strong><br>
-                                                    <?php echo htmlspecialchars($student['student_id']); ?>
-                                                </small>
-                                            </td>
-                                            <td><?php echo $student['total_reports']; ?></td>
-                                            <td>
-                                                <span class="badge bg-success"><?php echo $student['approved_reports']; ?></span>
+                                                <strong><?php echo htmlspecialchars($student['first_name'] . ' ' . $student['last_name']); ?></strong>
                                             </td>
                                             <td>
-                                                <?php if ($student['avg_grade']): ?>
-                                                    <span class="badge bg-primary"><?php echo number_format($student['avg_grade'], 1); ?></span>
+                                                <small class="text-muted"><?php echo htmlspecialchars($student['student_id']); ?></small>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-primary"><?php echo $student['total_reports']; ?></span>
+                                            </td>
+                                            <td>
+                                                <?php if ($student['approved_reports'] > 0): ?>
+                                                    <span class="badge bg-success">Approved</span>
                                                 <?php else: ?>
-                                                    <span class="text-muted">-</span>
+                                                    <span class="badge bg-warning">Pending</span>
                                                 <?php endif; ?>
                                             </td>
                                         </tr>
@@ -314,7 +294,26 @@ require_once '../includes/header.php';
                     <?php else: ?>
                         <div class="text-center py-4">
                             <i class="fas fa-users fa-2x text-muted mb-2"></i>
-                            <p class="text-muted">No student data in selected period</p>
+                            <p class="text-muted">No students have submitted reports in this period</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Report Grade Summary -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Report Grades Summary</h5>
+                </div>
+                <div class="card-body">
+                    <?php if (!empty($gradeDistribution)): ?>
+                        <canvas id="gradeChart" height="300"></canvas>
+                    <?php else: ?>
+                        <div class="text-center py-4">
+                            <i class="fas fa-chart-bar fa-2x text-muted mb-2"></i>
+                            <p class="text-muted">No graded reports in selected period</p>
                         </div>
                     <?php endif; ?>
                 </div>

@@ -34,6 +34,31 @@ if ($_POST) {
     $studentId = sanitizeInput($_POST['student_id']);
     $schoolId = (int)$_POST['school_id'];
     
+    // Handle ID photo upload
+    $idPhotoPath = null;
+    if (isset($_FILES['id_photo']) && $_FILES['id_photo']['error'] == 0) {
+        $uploadDir = '../uploads/id_photos/';
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+        
+        $fileExtension = strtolower(pathinfo($_FILES['id_photo']['name'], PATHINFO_EXTENSION));
+        $allowedExtensions = ['jpg', 'jpeg', 'png'];
+        
+        if (in_array($fileExtension, $allowedExtensions)) {
+            $fileName = $username . '_' . time() . '.' . $fileExtension;
+            $targetPath = $uploadDir . $fileName;
+            
+            if (move_uploaded_file($_FILES['id_photo']['tmp_name'], $targetPath)) {
+                $idPhotoPath = 'uploads/id_photos/' . $fileName;
+            } else {
+                $error = 'Failed to upload ID photo.';
+            }
+        } else {
+            $error = 'ID photo must be a JPG, JPEG, or PNG file.';
+        }
+    }
+    
     // Validation
     if (empty($username) || empty($email) || empty($password) || empty($firstName) || empty($lastName) || empty($studentId) || empty($schoolId)) {
         $error = 'Please fill in all required fields.';
@@ -43,6 +68,8 @@ if ($_POST) {
         $error = 'Password must be at least 6 characters long.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
+    } elseif (!isset($_FILES['id_photo']) || $_FILES['id_photo']['error'] != 0) {
+        $error = 'Please upload your student ID photo.';
     } else {
         // Check if username or email already exists
         $existingUser = $db->fetchOne(
@@ -68,7 +95,8 @@ if ($_POST) {
                     'last_name' => $lastName,
                     'role' => 'student',
                     'student_id' => $studentId,
-                    'school_id' => $schoolId
+                    'school_id' => $schoolId,
+                    'id_photo_path' => $idPhotoPath
                 ];
                 
                 $userId = $db->insert('users', $userData);
@@ -120,7 +148,7 @@ require_once '../includes/header.php';
             </div>
         <?php endif; ?>
         
-        <form method="POST" class="needs-validation" novalidate>
+        <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
             <div class="row">
                 <div class="col-md-6">
                     <div class="form-group">
@@ -196,6 +224,14 @@ require_once '../includes/header.php';
                         <div class="invalid-feedback">Please confirm your password.</div>
                     </div>
                 </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="id_photo" class="form-label">Student ID Photo *</label>
+                <input type="file" class="form-control" id="id_photo" name="id_photo" 
+                       accept="image/jpeg,image/jpg,image/png" required>
+                <div class="form-text">Upload a clear photo of your student ID (JPG, JPEG, or PNG format, max 5MB)</div>
+                <div class="invalid-feedback">Please upload your student ID photo.</div>
             </div>
             
             <div class="form-check mb-3">
