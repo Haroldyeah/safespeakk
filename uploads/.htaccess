@@ -1,0 +1,24 @@
+# Secure file uploads directory
+# Prevent direct access to uploaded files through URL
+
+# Deny all direct access
+Deny from all
+
+# Allow only specific file types to be served
+<FilesMatch "\.(pdf|doc|docx)$">
+    # Files can only be accessed through authenticated download scripts
+    Deny from all
+</FilesMatch>
+
+# Prevent execution of scripts
+<FilesMatch "\.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)$">
+    Deny from all
+</FilesMatch>
+
+# Disable directory browsing
+Options -Indexes
+
+# Prevent access to sensitive files
+<FilesMatch "(^#.*#|\.(bak|config|dist|fla|inc|ini|log|psd|sh|sql|sw[op])|~)$">
+    Deny from all
+</FilesMatch>
