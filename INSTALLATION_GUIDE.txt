@@ -1,0 +1,89 @@
+CAPSTONE REPORT MANAGEMENT SYSTEM - INSTALLATION GUIDE
+=====================================================
+
+QUICK SETUP FOR XAMPP/WAMP/LAMP:
+
+1. DOWNLOAD & EXTRACT
+   - Download all project files
+   - Extract to: C:\xampp\htdocs\capstone_system (Windows)
+   - Or: /opt/lampp/htdocs/capstone_system (Linux)
+
+2. START SERVICES
+   - Start Apache and MySQL in XAMPP Control Panel
+   - Or start your web server and MySQL service
+
+3. CREATE DATABASE
+   - Open browser: http://localhost/phpmyadmin
+   - Click "New" to create database
+   - Database name: capstone_system
+   - Collation: utf8mb4_general_ci
+   - Click "Create"
+
+4. IMPORT DATABASE
+   - Select "capstone_system" database
+   - Click "Import" tab
+   - Choose file: database/schema.sql
+   - Click "Go" to import
+   - Wait for "Import has been successfully finished"
+
+5. ACCESS SYSTEM
+   - Open browser: http://localhost/capstone_system
+   - You should see the homepage with login options
+
+DEFAULT LOGIN ACCOUNTS:
+======================
+
+ADMINISTRATOR:
+Username: admin
+Password: password123
+
+SCHOOL ACCOUNTS (use email and password):
+Central High School: admin@centralhs.edu / password123
+Northern Technical College: contact@northerntech.edu / password123
+Eastern University: info@easternuni.edu / password123
+Southern Academy: admin@southernacad.edu / password123
+Western Institute: contact@westerninst.edu / password123
+Maritime College: info@maritimecoll.edu / password123
+
+STUDENT ACCOUNTS (use username and password):
+student1 / password123
+student2 / password123
+student3 / password123
+student4 / password123
+student5 / password123
+
+TROUBLESHOOTING:
+===============
+
+Problem: "Database connection failed"
+Solution: 
+- Check if MySQL is running
+- Verify database name is "capstone_system"
+- Check config/database.php for correct credentials
+
+Problem: "Can't upload files"
+Solution:
+- Right-click "uploads" folder → Properties → Security
+- Give "Full Control" to Everyone (Windows)
+- Or run: chmod 777 uploads (Linux)
+
+Problem: "Page not found"
+Solution:
+- Make sure files are in correct web directory
+- Check URL: http://localhost/capstone_system
+- Ensure Apache is running
+
+Problem: "Login not working"
+Solution:
+- Use exact usernames/passwords listed above
+- Clear browser cache
+- Check if database import was successful
+
+SYSTEM REQUIREMENTS:
+===================
+- PHP 7.4 or higher
+- MySQL 5.7 or higher
+- Apache/Nginx web server
+- At least 100MB free space
+
+For additional help, see README.md file.
