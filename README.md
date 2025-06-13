@@ -15,15 +15,22 @@ A PHP and MySQL-based web application for managing capstone project reports with
   - Comments and grading system
   - Search and filtering capabilities
 
+- **Student Registration**
+  - School selection during registration
+  - Student ID photo upload requirement
+  - Comprehensive profile management
+
+- **Analytics Dashboard**
+  - School-specific report analytics
+  - Student submission tracking
+  - Report status distribution charts
+  - Monthly submission trends
+  - Print and download functionality for reports
+
 - **User Management**
   - Add/edit/delete users and schools
   - Role-based access control
   - Activity logging
-
-- **Dashboard Analytics**
-  - Statistical overview for all user types
-  - Report status distribution
-  - User activity tracking
 
 ## System Requirements
 
@@ -105,18 +112,19 @@ capstone_system/
 ## Usage Guide
 
 ### For Students
-1. Register or log in with student credentials
-2. Select your school from the dropdown
-3. Submit capstone reports with required information
-4. Track report status and view feedback
-5. Download approved reports
+1. Register by selecting your school and uploading student ID photo
+2. Log in with your credentials
+3. Submit capstone reports with required information and files
+4. Track report status and view feedback from schools
+5. Download approved reports and certificates
 
 ### For Schools
 1. Log in with school credentials
 2. View reports submitted by your students
-3. Add comments and provide feedback
-4. Change report status as needed
-5. Export reports for records
+3. Access detailed analytics about student submissions
+4. Add comments and provide feedback on reports
+5. Change report status and assign grades
+6. Print and download analytics reports for records
 
 ### For Administrators
 1. Log in with admin credentials
