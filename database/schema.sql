@@ -1,12 +1,8 @@
--- Capstone Report Management System Database Schema
-
--- Create database
-CREATE DATABASE IF NOT EXISTS capstone_system;
-USE capstone_system;
+-- Capstone Report Management System Database Schema for PostgreSQL
 
 -- Schools table
-CREATE TABLE schools (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS schools (
+    id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     code VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(255) NOT NULL,
@@ -14,42 +10,42 @@ CREATE TABLE schools (
     contact_person VARCHAR(255),
     phone VARCHAR(50),
     address TEXT,
-    status ENUM('active', 'inactive') DEFAULT 'active',
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Users table (Students and Admins)
-CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
     username VARCHAR(100) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
-    role ENUM('student', 'admin') NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('student', 'admin')),
     student_id VARCHAR(50),
-    school_id INT,
-    status ENUM('active', 'inactive') DEFAULT 'active',
+    school_id INTEGER,
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
 );
 
 -- Reports table
-CREATE TABLE reports (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS reports (
+    id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    student_id INT NOT NULL,
-    school_id INT NOT NULL,
+    student_id INTEGER NOT NULL,
+    school_id INTEGER NOT NULL,
     file_path VARCHAR(500),
     file_name VARCHAR(255),
-    file_size INT,
-    status ENUM('submitted', 'under_review', 'approved', 'rejected', 'revision_required') DEFAULT 'submitted',
+    file_size INTEGER,
+    status VARCHAR(30) DEFAULT 'submitted' CHECK (status IN ('submitted', 'under_review', 'approved', 'rejected', 'revision_required')),
     admin_comments TEXT,
     school_comments TEXT,
     submission_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reviewed_at TIMESTAMP NULL,
-    reviewed_by_admin INT,
+    reviewed_by_admin INTEGER,
     reviewed_by_school BOOLEAN DEFAULT FALSE,
     grade VARCHAR(10),
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -58,10 +54,10 @@ CREATE TABLE reports (
 );
 
 -- System logs table
-CREATE TABLE system_logs (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    user_type ENUM('student', 'school', 'admin'),
+CREATE TABLE IF NOT EXISTS system_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER,
+    user_type VARCHAR(20) CHECK (user_type IN ('student', 'school', 'admin')),
     action VARCHAR(255) NOT NULL,
     description TEXT,
     ip_address VARCHAR(45),
