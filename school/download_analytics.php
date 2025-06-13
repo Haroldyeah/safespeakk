@@ -3,6 +3,7 @@ require_once '../config/config.php';
 requireRole('school');
 
 // Database connection is already initialized in config.php
+global $db;
 
 // Include TCPDF library (you may need to download and include it)
 // For now, we'll create a simple HTML-to-PDF solution using DomPDF or similar

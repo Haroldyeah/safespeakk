@@ -7,7 +7,13 @@ if (session_status() === PHP_SESSION_NONE) {
 // Application configuration
 define('APP_NAME', 'Capstone Report Management System');
 define('APP_VERSION', '1.0.0');
-define('BASE_URL', 'http://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']));
+// Calculate base URL correctly for subdirectories
+$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+$host = $_SERVER['HTTP_HOST'];
+$path = dirname($_SERVER['SCRIPT_NAME']);
+// Remove subdirectory from path if we're in a subdirectory
+$basePath = str_replace('/school', '', str_replace('/admin', '', str_replace('/student', '', $path)));
+define('BASE_URL', $protocol . $host . $basePath);
 
 // File upload configuration
 define('UPLOAD_DIR', __DIR__ . '/../uploads/');

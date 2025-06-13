@@ -4,6 +4,7 @@ require_once '../config/config.php';
 requireRole('school');
 
 // Database connection is already initialized in config.php
+global $db;
 
 $schoolId = $_SESSION['school_id'];
 

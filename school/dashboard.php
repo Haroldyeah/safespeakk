@@ -53,9 +53,14 @@ require_once '../includes/header.php';
         </p>
     </div>
     <div class="col-auto">
-        <a href="view_reports.php" class="btn btn-primary">
-            <i class="fas fa-file-alt me-1"></i>View All Reports
-        </a>
+        <div class="btn-group">
+            <a href="view_reports.php" class="btn btn-primary">
+                <i class="fas fa-file-alt me-1"></i>View All Reports
+            </a>
+            <a href="analytics.php" class="btn btn-success">
+                <i class="fas fa-chart-bar me-1"></i>Analytics
+            </a>
+        </div>
     </div>
 </div>
 

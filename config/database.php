@@ -1,9 +1,22 @@
 <?php
 // Database configuration
-define('DB_HOST', 'localhost');
-define('DB_USERNAME', 'root');
-define('DB_PASSWORD', '');
-define('DB_NAME', 'capstone_system');
+// For development/testing, use PostgreSQL. For production with phpMyAdmin, use MySQL.
+if (isset($_ENV['PGHOST'])) {
+    // Development environment with PostgreSQL
+    define('DB_HOST', $_ENV['PGHOST']);
+    define('DB_USERNAME', $_ENV['PGUSER']);
+    define('DB_PASSWORD', $_ENV['PGPASSWORD']);
+    define('DB_NAME', $_ENV['PGDATABASE']);
+    define('DB_PORT', $_ENV['PGPORT']);
+    define('DB_TYPE', 'pgsql');
+} else {
+    // Production environment with MySQL
+    define('DB_HOST', 'localhost');
+    define('DB_USERNAME', 'root');
+    define('DB_PASSWORD', '');
+    define('DB_NAME', 'capstone_system');
+    define('DB_TYPE', 'mysql');
+}
 
 class Database {
     private $host = DB_HOST;
@@ -18,16 +31,30 @@ class Database {
     
     private function connect() {
         try {
-            $this->connection = new PDO(
-                "mysql:host={$this->host};dbname={$this->database};charset=utf8mb4",
-                $this->username,
-                $this->password,
-                [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_EMULATE_PREPARES => false
-                ]
-            );
+            if (DB_TYPE === 'pgsql') {
+                $port = defined('DB_PORT') ? DB_PORT : '5432';
+                $this->connection = new PDO(
+                    "pgsql:host={$this->host};port={$port};dbname={$this->database}",
+                    $this->username,
+                    $this->password,
+                    [
+                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                        PDO::ATTR_EMULATE_PREPARES => false
+                    ]
+                );
+            } else {
+                $this->connection = new PDO(
+                    "mysql:host={$this->host};dbname={$this->database};charset=utf8mb4",
+                    $this->username,
+                    $this->password,
+                    [
+                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                        PDO::ATTR_EMULATE_PREPARES => false
+                    ]
+                );
+            }
         } catch (PDOException $e) {
             die("Database connection failed: " . $e->getMessage());
         }
