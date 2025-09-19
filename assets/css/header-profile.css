@@ -1,0 +1,42 @@
+.header-profile-photo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.header-profile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.header-profile-photo-container {
+    position: relative;
+    width: 32px;
+    height: 32px;
+}
+
+.header-profile-photo-fallback {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+}
+
+.navbar .dropdown-item {
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.navbar .dropdown-item i {
+    width: 16px;
+}

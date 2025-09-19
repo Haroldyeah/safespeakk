@@ -18,7 +18,7 @@ $sortBy = $_GET['sort'] ?? 'submission_date';
 $sortOrder = $_GET['order'] ?? 'DESC';
 
 // Valid sort columns
-$validSortColumns = ['submission_date', 'title', 'status', 'first_name', 'student_id'];
+$validSortColumns = ['submission_date', 'title', 'status', 'first_name', 'student_id', 'date_of_incident'];
 if (!in_array($sortBy, $validSortColumns)) {
     $sortBy = 'submission_date';
 }
@@ -28,7 +28,7 @@ if (!in_array($sortOrder, ['ASC', 'DESC'])) {
 }
 
 // Build query conditions
-$conditions = ["r.school_id = ?"];
+$conditions = ["r.school_id = ?", "r.deleted_at IS NULL"];
 $params = [$schoolId];
 
 if ($search) {
@@ -52,14 +52,58 @@ $totalReports = $db->fetchOne(
 
 // Get reports
 $reports = $db->fetchAll(
-    "SELECT r.*, u.first_name, u.last_name, u.student_id, u.email
+    "SELECT r.*, u.first_name, u.last_name, u.student_id, u.email, s_user.name as registered_school_name, u.school_id as registered_school_id
      FROM reports r 
      JOIN users u ON r.student_id = u.id 
+     LEFT JOIN schools s_user ON u.school_id = s_user.id 
      WHERE $whereClause 
      ORDER BY $sortBy $sortOrder 
      LIMIT $perPage OFFSET $offset",
     $params
 );
+
+// Handle soft delete
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (isset($input['action']) && $input['action'] === 'soft_delete') {
+        $reportIds = $input['report_ids'] ?? [];
+        header('Content-Type: application/json');
+        
+        if (empty($reportIds)) {
+            echo json_encode(['success' => false, 'message' => 'No reports selected']);
+            exit;
+        }
+        
+        $deletedCount = 0;
+        foreach ($reportIds as $reportId) {
+            $reportId = (int)$reportId;
+            // Check if the report belongs to the school before deleting
+            $reportSchool = $db->fetchOne("SELECT school_id FROM reports WHERE id = ?", [$reportId]);
+            
+            if ($reportSchool && $reportSchool['school_id'] == $schoolId) {
+                $updateData = [
+                    'deleted_at' => date('Y-m-d H:i:s'),
+                    // We can set deleted_by_admin with a negative school_id to distinguish
+                    'deleted_by_admin' => -1 * (int)$_SESSION['school_id'] 
+                ];
+                
+                $success = $db->update('reports', $updateData, 'id = :id', ['id' => $reportId]);
+                if ($success instanceof PDOStatement) {
+                    $deletedCount++;
+                    logActivity($db, $_SESSION['school_id'], 'school', 'soft_delete_report', "Soft deleted report #$reportId");
+                }
+            }
+        }
+        
+        if ($deletedCount > 0) {
+            echo json_encode(['success' => true, 'message' => "$deletedCount report(s) deleted successfully"]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete reports or no reports found for this school']);
+        }
+        exit;
+    }
+}
 
 // Calculate pagination
 $totalPages = ceil($totalReports / $perPage);
@@ -107,14 +151,14 @@ require_once '../includes/header.php';
                     <option value="under_review" <?php echo $statusFilter === 'under_review' ? 'selected' : ''; ?>>Under Review</option>
                     <option value="approved" <?php echo $statusFilter === 'approved' ? 'selected' : ''; ?>>Approved</option>
                     <option value="rejected" <?php echo $statusFilter === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
-                    <option value="revision_required" <?php echo $statusFilter === 'revision_required' ? 'selected' : ''; ?>>Revision Required</option>
                 </select>
             </div>
             
             <div class="col-md-3">
                 <select class="form-select" name="sort">
-                    <option value="submission_date" <?php echo $sortBy === 'submission_date' ? 'selected' : ''; ?>>Sort by Date</option>
-                    <option value="title" <?php echo $sortBy === 'title' ? 'selected' : ''; ?>>Sort by Title</option>
+                    <option value="submission_date" <?php echo $sortBy === 'submission_date' ? 'selected' : ''; ?>>Sort by Submission Date</option>
+                    <option value="date_of_incident" <?php echo $sortBy === 'date_of_incident' ? 'selected' : ''; ?>>Sort by Incident Date</option>
+                    <option value="title" <?php echo $sortBy === 'title' ? 'selected' : ''; ?>>Sort by Type</option>
                     <option value="first_name" <?php echo $sortBy === 'first_name' ? 'selected' : ''; ?>>Sort by Student</option>
                     <option value="status" <?php echo $sortBy === 'status' ? 'selected' : ''; ?>>Sort by Status</option>
                 </select>
@@ -137,17 +181,27 @@ require_once '../includes/header.php';
 <!-- Reports List -->
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">
-            Report List
-            <?php if ($search || $statusFilter): ?>
-                <small class="text-muted">
-                    (<?php echo $totalReports; ?> results found)
-                </small>
+        <div class="d-flex align-items-center">
+            <h5 class="mb-0 me-3">
+                Report List
+                <?php if ($search || $statusFilter): ?>
+                    <small class="text-muted">
+                        (<?php echo $totalReports; ?> results found)
+                    </small>
+                <?php endif; ?>
+            </h5>
+            <?php if (!empty($reports)): ?>
+                <button class="btn btn-sm btn-outline-primary" id="selectAllBtn">
+                    <i class="fas fa-check-square me-1"></i>Select All
+                </button>
             <?php endif; ?>
-        </h5>
+        </div>
         
         <?php if (!empty($reports)): ?>
             <div class="btn-group">
+                <button class="btn btn-sm btn-outline-danger" id="deleteSelectedBtn" disabled>
+                    <i class="fas fa-trash-alt me-1"></i>Delete Selected
+                </button>
                 <button class="btn btn-sm btn-outline-primary" onclick="exportTable('reportsTable', 'school_reports')">
                     <i class="fas fa-download me-1"></i>Export
                 </button>
@@ -175,8 +229,13 @@ require_once '../includes/header.php';
                     <thead>
                         <tr>
                             <th>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="selectAllCheckbox">
+                                </div>
+                            </th>
+                            <th>
                                 <a href="?sort=title&order=<?php echo $sortBy === 'title' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>" class="text-decoration-none text-white">
-                                    Title 
+                                    Type of Bullying 
                                     <?php if ($sortBy === 'title'): ?>
                                         <i class="fas fa-sort-<?php echo $sortOrder === 'ASC' ? 'up' : 'down'; ?>"></i>
                                     <?php endif; ?>
@@ -190,10 +249,19 @@ require_once '../includes/header.php';
                                     <?php endif; ?>
                                 </a>
                             </th>
+                            <th>Registered School</th>
                             <th>
                                 <a href="?sort=status&order=<?php echo $sortBy === 'status' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>" class="text-decoration-none text-white">
                                     Status 
                                     <?php if ($sortBy === 'status'): ?>
+                                        <i class="fas fa-sort-<?php echo $sortOrder === 'ASC' ? 'up' : 'down'; ?>"></i>
+                                    <?php endif; ?>
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort=date_of_incident&order=<?php echo $sortBy === 'date_of_incident' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>" class="text-decoration-none text-white">
+                                    Date of Incident
+                                    <?php if ($sortBy === 'date_of_incident'): ?>
                                         <i class="fas fa-sort-<?php echo $sortOrder === 'ASC' ? 'up' : 'down'; ?>"></i>
                                     <?php endif; ?>
                                 </a>
@@ -207,13 +275,18 @@ require_once '../includes/header.php';
                                 </a>
                             </th>
                             <th>File Size</th>
-                            <th>Grade</th>
+                            <th>Evidence</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($reports as $report): ?>
                             <tr class="searchable-row">
+                                <td>
+                                    <div class="form-check">
+                                        <input class="form-check-input report-checkbox" type="checkbox" value="<?php echo $report['id']; ?>">
+                                    </div>
+                                </td>
                                 <td>
                                     <div>
                                         <h6 class="mb-1"><?php echo htmlspecialchars($report['title']); ?></h6>
@@ -234,23 +307,40 @@ require_once '../includes/header.php';
                                     </div>
                                 </td>
                                 <td>
+                                    <?php echo htmlspecialchars($report['registered_school_name'] ?? 'N/A'); ?>
+                                    <?php if ($report['school_id'] !== $report['registered_school_id']): ?>
+                                        <span class="badge bg-warning text-dark ms-2">Different School</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
                                     <span class="status-badge status-<?php echo $report['status']; ?>">
                                         <?php echo ucfirst(str_replace('_', ' ', $report['status'])); ?>
                                     </span>
                                 </td>
                                 <td>
+                                    <small><?php echo $report['date_of_incident'] ? formatDate($report['date_of_incident']) : 'N/A'; ?></small>
+                                </td>
+                                <td>
                                     <small><?php echo formatDate($report['submission_date']); ?></small>
                                 </td>
                                 <td>
-                                    <small><?php echo formatFileSize($report['file_size']); ?></small>
+                                    <small><?php echo !empty($report['file_size']) ? formatFileSize($report['file_size']) : 'N/A'; ?></small>
                                 </td>
                                 <td>
-                                    <?php if ($report['grade']): ?>
-                                        <span class="badge bg-success">
-                                            <?php echo htmlspecialchars($report['grade']); ?>
-                                        </span>
+                                    <?php
+                                    // Check if there are evidence files for this report
+                                    $evidenceCount = $db->fetchOne(
+                                        "SELECT COUNT(*) as count FROM report_evidence WHERE report_id = ?", 
+                                        [$report['id']]
+                                    )['count'];
+                                    
+                                    if ($evidenceCount > 0): ?>
+                                        <button type="button" class="btn btn-sm btn-outline-info" 
+                                                onclick="window.location.href='manage_report.php?id=<?php echo $report['id']; ?>#evidence'">
+                                            <i class="fas fa-image me-1"></i>View Evidence (<?php echo $evidenceCount; ?>)
+                                        </button>
                                     <?php else: ?>
-                                        <small class="text-muted">Not graded</small>
+                                        <span class="text-muted"><i class="fas fa-ban me-1"></i>No evidence</span>
                                     <?php endif; ?>
                                 </td>
                                 <td>
@@ -259,24 +349,21 @@ require_once '../includes/header.php';
                                             <i class="fas fa-eye me-1"></i>Review
                                         </a>
                                         
-                                        <?php if ($report['status'] === 'submitted'): ?>
-                                            <button type="button" class="btn btn-success" onclick="updateStatus(<?php echo $report['id']; ?>, 'under_review')">
-                                                <i class="fas fa-play me-1"></i>Start Review
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                                                Actions
                                             </button>
-                                        <?php elseif ($report['status'] === 'under_review'): ?>
-                                            <div class="btn-group">
-                                                <button type="button" class="btn btn-outline-success dropdown-toggle" data-bs-toggle="dropdown">
-                                                    Actions
-                                                </button>
-                                                <ul class="dropdown-menu">
+                                            <ul class="dropdown-menu">
+                                                <?php if ($report['status'] === 'submitted'): ?>
+                                                    <li>
+                                                        <button class="dropdown-item" onclick="updateStatus(<?php echo $report['id']; ?>, 'under_review')">
+                                                            <i class="fas fa-eye text-info me-1"></i>Mark Under Review
+                                                        </button>
+                                                    </li>
+                                                <?php elseif ($report['status'] === 'under_review'): ?>
                                                     <li>
                                                         <button class="dropdown-item" onclick="updateStatus(<?php echo $report['id']; ?>, 'approved')">
                                                             <i class="fas fa-check text-success me-1"></i>Approve
-                                                        </button>
-                                                    </li>
-                                                    <li>
-                                                        <button class="dropdown-item" onclick="updateStatus(<?php echo $report['id']; ?>, 'revision_required')">
-                                                            <i class="fas fa-edit text-warning me-1"></i>Request Revision
                                                         </button>
                                                     </li>
                                                     <li>
@@ -284,9 +371,15 @@ require_once '../includes/header.php';
                                                             <i class="fas fa-times text-danger me-1"></i>Reject
                                                         </button>
                                                     </li>
-                                                </ul>
-                                            </div>
-                                        <?php endif; ?>
+                                                <?php endif; ?>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li>
+                                                    <button class="dropdown-item text-danger" onclick="deleteReport(<?php echo $report['id']; ?>)">
+                                                        <i class="fas fa-trash text-danger me-1"></i>Delete
+                                                    </button>
+                                                </li>
+                                            </ul>
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
@@ -375,6 +468,132 @@ function updateStatus(reportId, newStatus) {
         });
     }
 }
+
+function deleteReport(reportId) {
+    if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+        fetch('view_reports.php', { // Note: Changed to view_reports.php for school context
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'soft_delete',
+                report_ids: [reportId]
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Report deleted successfully!', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showAlert(data.message || 'Failed to delete report', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('An error occurred while deleting report', 'danger');
+        });
+    }
+}
+
+// Handle checkbox selection
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+    const reportCheckboxes = document.querySelectorAll('.report-checkbox');
+
+    // Select all functionality
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            reportCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateDeleteButtonState();
+        });
+    }
+
+    // Select all button functionality
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function() {
+            const allChecked = Array.from(reportCheckboxes).every(cb => cb.checked);
+            reportCheckboxes.forEach(checkbox => {
+                checkbox.checked = !allChecked;
+            });
+            selectAllCheckbox.checked = !allChecked;
+            updateDeleteButtonState();
+        });
+    }
+
+    // Individual checkbox change
+    reportCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateDeleteButtonState();
+            
+            // Update select all checkbox state
+            const checkedCount = document.querySelectorAll('.report-checkbox:checked').length;
+            if (checkedCount === 0) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = false;
+            } else if (checkedCount === reportCheckboxes.length) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = true;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+            }
+        });
+    });
+
+    // Delete selected functionality
+    if (deleteSelectedBtn) {
+        deleteSelectedBtn.addEventListener('click', function() {
+            const selectedReports = Array.from(document.querySelectorAll('.report-checkbox:checked'))
+                .map(cb => cb.value);
+            
+            if (selectedReports.length === 0) {
+                showAlert('Please select reports to delete', 'warning');
+                return;
+            }
+
+            if (confirm(`Are you sure you want to delete ${selectedReports.length} selected report(s)? This action cannot be undone.`)) {
+                fetch('view_reports.php', { // Note: Changed to view_reports.php for school context
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'soft_delete',
+                        report_ids: selectedReports
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert(data.message, 'success');
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        showAlert(data.message || 'Failed to delete reports', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert('An error occurred while deleting reports', 'danger');
+                });
+            }
+        });
+    }
+
+    function updateDeleteButtonState() {
+        const checkedCount = document.querySelectorAll('.report-checkbox:checked').length;
+        if (deleteSelectedBtn) {
+            deleteSelectedBtn.disabled = checkedCount === 0;
+            deleteSelectedBtn.innerHTML = checkedCount > 0 
+                ? `<i class="fas fa-trash-alt me-1"></i>Delete Selected (${checkedCount})`
+                : '<i class="fas fa-trash-alt me-1"></i>Delete Selected';
+        }
+    }
+});
 </script>
 
 <?php require_once '../includes/footer.php'; ?>

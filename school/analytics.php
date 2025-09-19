@@ -21,44 +21,29 @@ $school = $db->fetchOne(
 
 // Overall statistics
 $totalReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND submission_date BETWEEN ? AND ?",
+    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND submission_date BETWEEN ? AND ? AND deleted_at IS NULL",
     [$schoolId, $dateFrom, $dateTo]
 )['count'];
 
 $submittedReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'submitted' AND submission_date BETWEEN ? AND ?",
+    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'submitted' AND submission_date BETWEEN ? AND ? AND deleted_at IS NULL",
     [$schoolId, $dateFrom, $dateTo]
 )['count'];
 
 $underReviewReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'under_review' AND submission_date BETWEEN ? AND ?",
+    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'under_review' AND submission_date BETWEEN ? AND ? AND deleted_at IS NULL",
     [$schoolId, $dateFrom, $dateTo]
 )['count'];
 
 $approvedReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'approved' AND submission_date BETWEEN ? AND ?",
+    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'approved' AND submission_date BETWEEN ? AND ? AND deleted_at IS NULL",
     [$schoolId, $dateFrom, $dateTo]
 )['count'];
 
 $rejectedReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'rejected' AND submission_date BETWEEN ? AND ?",
+    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'rejected' AND submission_date BETWEEN ? AND ? AND deleted_at IS NULL",
     [$schoolId, $dateFrom, $dateTo]
 )['count'];
-
-$revisionRequiredReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'revision_required' AND submission_date BETWEEN ? AND ?",
-    [$schoolId, $dateFrom, $dateTo]
-)['count'];
-
-// Grade distribution
-$gradeDistribution = $db->fetchAll(
-    "SELECT grade, COUNT(*) as count 
-     FROM reports 
-     WHERE school_id = ? AND grade IS NOT NULL AND submission_date BETWEEN ? AND ?
-     GROUP BY grade 
-     ORDER BY grade",
-    [$schoolId, $dateFrom, $dateTo]
-);
 
 // Monthly submission trends
 $monthlyData = $db->fetchAll(
@@ -68,27 +53,29 @@ $monthlyData = $db->fetchAll(
         SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_count,
         SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_count
      FROM reports 
-     WHERE school_id = ? AND submission_date BETWEEN ? AND ?
+     WHERE school_id = ? AND submission_date BETWEEN ? AND ? AND deleted_at IS NULL
      GROUP BY DATE_FORMAT(submission_date, '%Y-%m')
      ORDER BY month",
     [$schoolId, $dateFrom, $dateTo]
 );
 
-// Top performing students
+// Top performing students - FIXED to properly exclude soft-deleted reports
 $topStudents = $db->fetchAll(
     "SELECT 
         u.first_name, u.last_name, u.student_id,
         COUNT(r.id) as total_reports,
-        SUM(CASE WHEN r.status = 'approved' THEN 1 ELSE 0 END) as approved_reports,
-        AVG(CASE WHEN r.grade IS NOT NULL AND r.grade != '' THEN CAST(r.grade as DECIMAL(4,2)) ELSE NULL END) as avg_grade
+        SUM(CASE WHEN r.status = 'approved' THEN 1 ELSE 0 END) as approved_reports
      FROM users u
-     LEFT JOIN reports r ON u.id = r.student_id AND r.submission_date BETWEEN ? AND ?
-     WHERE u.school_id = ? AND u.role = 'student'
-     GROUP BY u.id
+     INNER JOIN reports r ON u.id = r.student_id 
+     WHERE u.school_id = ? 
+       AND u.role = 'student'
+       AND r.submission_date BETWEEN ? AND ?
+       AND r.deleted_at IS NULL
+     GROUP BY u.id, u.first_name, u.last_name, u.student_id
      HAVING total_reports > 0
-     ORDER BY approved_reports DESC, avg_grade DESC
+     ORDER BY approved_reports DESC, total_reports DESC
      LIMIT 10",
-    [$dateFrom, $dateTo, $schoolId]
+    [$schoolId, $dateFrom, $dateTo]
 );
 
 // Recent activity
@@ -96,7 +83,7 @@ $recentActivity = $db->fetchAll(
     "SELECT r.*, u.first_name, u.last_name, u.student_id
      FROM reports r
      JOIN users u ON r.student_id = u.id
-     WHERE r.school_id = ? AND r.submission_date BETWEEN ? AND ?
+     WHERE r.school_id = ? AND r.submission_date BETWEEN ? AND ? AND r.deleted_at IS NULL
      ORDER BY r.submission_date DESC
      LIMIT 15",
     [$schoolId, $dateFrom, $dateTo]
@@ -106,9 +93,9 @@ $recentActivity = $db->fetchAll(
 $approvalRate = $totalReports > 0 ? round(($approvedReports / $totalReports) * 100, 1) : 0;
 $rejectionRate = $totalReports > 0 ? round(($rejectedReports / $totalReports) * 100, 1) : 0;
 
-// Get active students count
+// Get active students count (students who have submitted non-deleted reports)
 $activeStudents = $db->fetchOne(
-    "SELECT COUNT(DISTINCT student_id) as count FROM reports WHERE school_id = ? AND submission_date BETWEEN ? AND ?",
+    "SELECT COUNT(DISTINCT student_id) as count FROM reports WHERE school_id = ? AND submission_date BETWEEN ? AND ? AND deleted_at IS NULL",
     [$schoolId, $dateFrom, $dateTo]
 )['count'];
 
@@ -241,7 +228,14 @@ require_once '../includes/header.php';
                     <h5 class="mb-0">Monthly Report Submissions</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="trendsChart" height="300"></canvas>
+                    <?php if (!empty($monthlyData)): ?>
+                        <canvas id="trendsChart" height="300"></canvas>
+                    <?php else: ?>
+                        <div class="text-center py-4">
+                            <i class="fas fa-chart-line fa-2x text-muted mb-2"></i>
+                            <p class="text-muted">No data available for the selected period to display the chart.</p>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -254,6 +248,7 @@ require_once '../includes/header.php';
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">Students with Submitted Reports</h5>
+                    <small class="text-muted">Only showing students with non-deleted reports</small>
                 </div>
                 <div class="card-body">
                     <?php if (!empty($topStudents)): ?>
@@ -264,6 +259,7 @@ require_once '../includes/header.php';
                                         <th>Student Name</th>
                                         <th>Student ID</th>
                                         <th>Reports Submitted</th>
+                                        <th>Approved</th>
                                         <th>Status</th>
                                     </tr>
                                 </thead>
@@ -280,10 +276,13 @@ require_once '../includes/header.php';
                                                 <span class="badge bg-primary"><?php echo $student['total_reports']; ?></span>
                                             </td>
                                             <td>
+                                                <span class="badge bg-success"><?php echo $student['approved_reports']; ?></span>
+                                            </td>
+                                            <td>
                                                 <?php if ($student['approved_reports'] > 0): ?>
-                                                    <span class="badge bg-success">Approved</span>
+                                                    <span class="badge bg-success">Has Approved</span>
                                                 <?php else: ?>
-                                                    <span class="badge bg-warning">Pending</span>
+                                                    <span class="badge bg-warning">All Pending</span>
                                                 <?php endif; ?>
                                             </td>
                                         </tr>
@@ -301,21 +300,38 @@ require_once '../includes/header.php';
             </div>
         </div>
 
-        <!-- Report Grade Summary -->
+        <!-- Performance Summary -->
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Report Grades Summary</h5>
+                    <h5 class="mb-0">Performance Summary</h5>
                 </div>
                 <div class="card-body">
-                    <?php if (!empty($gradeDistribution)): ?>
-                        <canvas id="gradeChart" height="300"></canvas>
-                    <?php else: ?>
-                        <div class="text-center py-4">
-                            <i class="fas fa-chart-bar fa-2x text-muted mb-2"></i>
-                            <p class="text-muted">No graded reports in selected period</p>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border-end">
+                                <h4 class="text-success"><?php echo $approvalRate; ?>%</h4>
+                                <small class="text-muted">Approval Rate</small>
+                            </div>
                         </div>
-                    <?php endif; ?>
+                        <div class="col-6">
+                            <h4 class="text-danger"><?php echo $rejectionRate; ?>%</h4>
+                            <small class="text-muted">Rejection Rate</small>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border-end">
+                                <h5 class="text-primary"><?php echo count($topStudents); ?></h5>
+                                <small class="text-muted">Students with Reports</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <h5 class="text-info"><?php echo $activeStudents; ?></h5>
+                            <small class="text-muted">Unique Students</small>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -336,7 +352,6 @@ require_once '../includes/header.php';
                                 <th>Student</th>
                                 <th>Status</th>
                                 <th>Submission Date</th>
-                                <th>Grade</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -359,13 +374,6 @@ require_once '../includes/header.php';
                                     </td>
                                     <td>
                                         <small><?php echo formatDate($report['submission_date']); ?></small>
-                                    </td>
-                                    <td>
-                                        <?php if ($report['grade']): ?>
-                                            <span class="badge bg-success"><?php echo htmlspecialchars($report['grade']); ?></span>
-                                        <?php else: ?>
-                                            <span class="text-muted">-</span>
-                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -391,9 +399,9 @@ const statusCtx = document.getElementById('statusChart').getContext('2d');
 const statusChart = new Chart(statusCtx, {
     type: 'doughnut',
     data: {
-        labels: ['Approved', 'Under Review', 'Submitted', 'Rejected', 'Revision Required'],
+        labels: ['Approved', 'Under Review', 'Submitted', 'Rejected'],
         datasets: [{
-            data: [<?php echo $approvedReports; ?>, <?php echo $underReviewReports; ?>, <?php echo $submittedReports; ?>, <?php echo $rejectedReports; ?>, <?php echo $revisionRequiredReports; ?>],
+            data: [<?php echo $approvedReports; ?>, <?php echo $underReviewReports; ?>, <?php echo $submittedReports; ?>, <?php echo $rejectedReports; ?>],
             backgroundColor: ['#059669', '#F59E0B', '#3B82F6', '#EF4444', '#8B5CF6']
         }]
     },
@@ -408,66 +416,192 @@ const statusChart = new Chart(statusCtx, {
     }
 });
 
-// Monthly Trends Chart
+<?php if (!empty($monthlyData)): ?>
+// Monthly Trends Chart with Progressive Animation
 const trendsCtx = document.getElementById('trendsChart').getContext('2d');
+const monthlyDataLabels = [<?php echo "'" . implode("','", array_column($monthlyData, 'month')) . "'"; ?>];
+
+// Animation configuration for progressive line drawing
+const totalDuration = 2000;
+const delayBetweenPoints = totalDuration / monthlyDataLabels.length;
+const previousY = (ctx) => ctx.index === 0 ? ctx.chart.scales.y.getPixelForValue(100) : ctx.chart.getDatasetMeta(ctx.datasetIndex).data[ctx.index - 1].getProps(['y'], true).y;
+
+const animation = {
+    x: {
+        type: 'number',
+        easing: 'easeOutCubic',
+        duration: delayBetweenPoints,
+        from: NaN, // the point is initially skipped
+        delay(ctx) {
+            if (ctx.type !== 'data' || ctx.xStarted) {
+                return 0;
+            }
+            ctx.xStarted = true;
+            return ctx.index * delayBetweenPoints;
+        }
+    },
+    y: {
+        type: 'number',
+        easing: 'easeOutCubic',
+        duration: delayBetweenPoints,
+        from: previousY,
+        delay(ctx) {
+            if (ctx.type !== 'data' || ctx.yStarted) {
+                return 0;
+            }
+            ctx.yStarted = true;
+            return ctx.index * delayBetweenPoints;
+        }
+    }
+};
+
 const trendsChart = new Chart(trendsCtx, {
     type: 'line',
     data: {
-        labels: [<?php echo "'" . implode("','", array_column($monthlyData, 'month')) . "'"; ?>],
+        labels: monthlyDataLabels,
         datasets: [{
             label: 'Total Submissions',
             data: [<?php echo implode(',', array_column($monthlyData, 'total_submissions')); ?>],
             borderColor: '#3B82F6',
             backgroundColor: 'rgba(59, 130, 246, 0.1)',
-            fill: true
+            fill: true,
+            tension: 0.4, // Smooth curves
+            pointBackgroundColor: '#3B82F6',
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 2,
+            pointRadius: 5,
+            pointHoverRadius: 7,
         }, {
             label: 'Approved',
             data: [<?php echo implode(',', array_column($monthlyData, 'approved_count')); ?>],
             borderColor: '#059669',
-            backgroundColor: 'rgba(5, 150, 105, 0.1)'
+            backgroundColor: 'rgba(5, 150, 105, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointBackgroundColor: '#059669',
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 2,
+            pointRadius: 5,
+            pointHoverRadius: 7,
         }, {
             label: 'Rejected',
             data: [<?php echo implode(',', array_column($monthlyData, 'rejected_count')); ?>],
             borderColor: '#EF4444',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)'
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointBackgroundColor: '#EF4444',
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 2,
+            pointRadius: 5,
+            pointHoverRadius: 7,
         }]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation,
+        interaction: {
+            intersect: false,
+            mode: 'index',
+        },
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: {
+                    usePointStyle: true,
+                    padding: 20,
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                titleColor: '#ffffff',
+                bodyColor: '#ffffff',
+                borderColor: 'rgba(255, 255, 255, 0.1)',
+                borderWidth: 1,
+                cornerRadius: 8,
+                displayColors: true,
+                callbacks: {
+                    title: function(context) {
+                        return 'Month: ' + context[0].label;
+                    },
+                    label: function(context) {
+                        return context.dataset.label + ': ' + context.parsed.y + ' reports';
+                    }
+                }
+            }
+        },
         scales: {
+            x: {
+                display: true,
+                title: {
+                    display: true,
+                    text: 'Month',
+                    color: '#6b7280',
+                    font: {
+                        size: 12,
+                        weight: 'bold'
+                    }
+                },
+                grid: {
+                    display: true,
+                    color: 'rgba(0, 0, 0, 0.05)',
+                },
+                ticks: {
+                    color: '#6b7280',
+                    font: {
+                        size: 11
+                    }
+                }
+            },
             y: {
-                beginAtZero: true
+                display: true,
+                beginAtZero: true,
+                title: {
+                    display: true,
+                    text: 'Number of Reports',
+                    color: '#6b7280',
+                    font: {
+                        size: 12,
+                        weight: 'bold'
+                    }
+                },
+                grid: {
+                    display: true,
+                    color: 'rgba(0, 0, 0, 0.05)',
+                },
+                ticks: {
+                    color: '#6b7280',
+                    font: {
+                        size: 11
+                    },
+                    stepSize: 1,
+                    callback: function(value) {
+                        return Math.floor(value) === value ? value : '';
+                    }
+                }
+            }
+        },
+        elements: {
+            line: {
+                borderWidth: 3,
+            },
+            point: {
+                hoverBackgroundColor: '#ffffff',
+                hoverBorderWidth: 3,
             }
         }
     }
 });
 
-<?php if (!empty($gradeDistribution)): ?>
-// Grade Distribution Chart
-const gradeCtx = document.getElementById('gradeChart').getContext('2d');
-const gradeChart = new Chart(gradeCtx, {
-    type: 'bar',
-    data: {
-        labels: [<?php echo "'" . implode("','", array_column($gradeDistribution, 'grade')) . "'"; ?>],
-        datasets: [{
-            label: 'Number of Reports',
-            data: [<?php echo implode(',', array_column($gradeDistribution, 'count')); ?>],
-            backgroundColor: '#7C3AED',
-            borderColor: '#5B21B6',
-            borderWidth: 1
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: true
-            }
-        }
-    }
-});
+// Optional: Add a refresh animation function
+function refreshChart() {
+    trendsChart.reset();
+    trendsChart.update();
+}
+
+// Optional: Add chart refresh button functionality
+// You can call refreshChart() to replay the animation
 <?php endif; ?>
 
 function printAnalytics() {
@@ -515,17 +649,11 @@ document.head.insertAdjacentHTML('beforeend', printStyles);
     font-size: 0.75rem;
     font-weight: 500;
 }
-
-.status-submitted { background-color: #EBF8FF; color: #1E40AF; }
+.status-submitted { background-color: #EBF8FF; color: #1e38afff; }
 .status-under_review { background-color: #FEF3C7; color: #B45309; }
 .status-approved { background-color: #D1FAE5; color: #047857; }
 .status-rejected { background-color: #FEE2E2; color: #B91C1C; }
 .status-revision_required { background-color: #EDE9FE; color: #6B21A8; }
-
-@media print {
-    .no-print { display: none !important; }
-    .card { break-inside: avoid; }
-}
 </style>
 
 <?php require_once '../includes/footer.php'; ?>

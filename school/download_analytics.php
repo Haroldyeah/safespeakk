@@ -48,11 +48,6 @@ $submittedReports = $db->fetchOne(
     [$schoolId, $dateFrom, $dateTo]
 )['count'];
 
-$revisionRequiredReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'revision_required' AND submission_date BETWEEN ? AND ?",
-    [$schoolId, $dateFrom, $dateTo]
-)['count'];
-
 // Calculate rates
 $approvalRate = $totalReports > 0 ? round(($approvedReports / $totalReports) * 100, 1) : 0;
 $rejectionRate = $totalReports > 0 ? round(($rejectedReports / $totalReports) * 100, 1) : 0;
@@ -123,7 +118,6 @@ header('Content-Disposition: attachment; filename="' . $school['name'] . '_Analy
         .status-rejected { background-color: #fee2e2; color: #b91c1c; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
         .status-under_review { background-color: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
         .status-submitted { background-color: #ebf8ff; color: #1e40af; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
-        .status-revision_required { background-color: #ede9fe; color: #6b21a8; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
         .footer { margin-top: 50px; text-align: center; color: #666; font-size: 12px; border-top: 1px solid #ddd; padding-top: 20px; }
     </style>
 </head>
@@ -162,10 +156,6 @@ header('Content-Disposition: attachment; filename="' . $school['name'] . '_Analy
             <div class="stat-number" style="color: #EF4444;"><?php echo $rejectedReports; ?></div>
             <div class="stat-label">Rejected</div>
             <div style="color: #EF4444; font-size: 12px;"><?php echo $rejectionRate; ?>%</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number" style="color: #8B5CF6;"><?php echo $revisionRequiredReports; ?></div>
-            <div class="stat-label">Revision Required</div>
         </div>
         <div class="stat-card">
             <div class="stat-number"><?php echo $activeStudents; ?></div>

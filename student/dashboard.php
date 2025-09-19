@@ -11,7 +11,7 @@ $stats = [
     'total_reports' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE student_id = ?", [$studentId])['count'],
     'submitted' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE student_id = ? AND status = 'submitted'", [$studentId])['count'],
     'approved' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE student_id = ? AND status = 'approved'", [$studentId])['count'],
-    'under_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE student_id = ? AND status IN ('under_review', 'revision_required')", [$studentId])['count']
+    'under_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE student_id = ? AND status = 'under_review'", [$studentId])['count']
 ];
 
 // Get recent reports
@@ -21,18 +21,21 @@ $recentReports = $db->fetchAll(
      JOIN schools s ON r.school_id = s.id 
      WHERE r.student_id = ? 
      ORDER BY r.submission_date DESC 
-     LIMIT 5",
+     LIMIT 3",
     [$studentId]
 );
 
 // Get school information
 $school = $db->fetchOne("SELECT name FROM schools WHERE id = ?", [$schoolId]);
 
+// Fetch full user record (including id_photo_path and student_id)
+$userRecord = $db->fetchOne("SELECT id, first_name, last_name, email, student_id, id_photo_path, status, created_at FROM users WHERE id = ?", [$studentId]);
+
 require_once '../includes/header.php';
 ?>
 
-<div class="row mb-4">
-    <div class="col">
+<div class="row mb-4 align-items-center">
+    <div class="col-12">
         <h1 class="h3 mb-3">
             <i class="fas fa-tachometer-alt text-primary me-2"></i>
             Student Dashboard
@@ -43,11 +46,6 @@ require_once '../includes/header.php';
                 <span class="badge bg-primary ms-2"><?php echo htmlspecialchars($school['name']); ?></span>
             <?php endif; ?>
         </p>
-    </div>
-    <div class="col-auto">
-        <a href="submit_report.php" class="btn btn-primary">
-            <i class="fas fa-plus me-1"></i>Submit New Report
-        </a>
     </div>
 </div>
 
@@ -61,7 +59,7 @@ require_once '../includes/header.php';
         <p>Total Reports</p>
     </div>
     
-    <div class="dashboard-card" style="background: linear-gradient(135deg, var(--warning-color) 0%, #F97316 100%);">
+    <div class="dashboard-card" ">
         <div class="icon">
             <i class="fas fa-clock"></i>
         </div>
@@ -69,7 +67,7 @@ require_once '../includes/header.php';
         <p>Awaiting Review</p>
     </div>
     
-    <div class="dashboard-card" style="background: linear-gradient(135deg, var(--accent-color) 0%, #8B5CF6 100%);">
+    <div class="dashboard-card">
         <div class="icon">
             <i class="fas fa-eye"></i>
         </div>
@@ -77,7 +75,7 @@ require_once '../includes/header.php';
         <p>Under Review</p>
     </div>
     
-    <div class="dashboard-card" style="background: linear-gradient(135deg, var(--secondary-color) 0%, #10B981 100%);">
+    <div class="dashboard-card">
         <div class="icon">
             <i class="fas fa-check-circle"></i>
         </div>
@@ -88,8 +86,8 @@ require_once '../includes/header.php';
 
 <div class="row">
     <!-- Recent Reports -->
-    <div class="col-lg-8">
-        <div class="card">
+    <div class="col-lg-8 col-12">
+        <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
                     <i class="fas fa-history me-2"></i>Recent Reports
@@ -103,10 +101,7 @@ require_once '../includes/header.php';
                     <div class="text-center py-4">
                         <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
                         <h6 class="text-muted">No reports submitted yet</h6>
-                        <p class="text-muted mb-3">Start by submitting your first capstone report</p>
-                        <a href="submit_report.php" class="btn btn-primary">
-                            <i class="fas fa-plus me-1"></i>Submit Report
-                        </a>
+                        <p class="text-muted mb-3">Start by submitting your first report using the Report Actions panel</p>
                     </div>
                 <?php else: ?>
                     <div class="list-group list-group-flush">
@@ -127,13 +122,7 @@ require_once '../includes/header.php';
                                     <span class="status-badge status-<?php echo $report['status']; ?>">
                                         <?php echo ucfirst(str_replace('_', ' ', $report['status'])); ?>
                                     </span>
-                                    <?php if ($report['grade']): ?>
-                                        <div class="mt-1">
-                                            <small class="text-success fw-bold">
-                                                Grade: <?php echo htmlspecialchars($report['grade']); ?>
-                                            </small>
-                                        </div>
-                                    <?php endif; ?>
+                                   
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -141,24 +130,103 @@ require_once '../includes/header.php';
                 <?php endif; ?>
             </div>
         </div>
+
+        <!-- Student Profile Information -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-user me-2"></i>Profile Information
+                </h5>
+                <a href="edit_profile.php" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-edit me-1"></i>Edit
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6 col-12">
+                        <div class="d-flex align-items-center mb-3">
+                            <?php
+                            // Get photo path from database
+                            $photoPath = $userRecord['id_photo_path'] ?? '';
+                            if (!empty($photoPath) && file_exists(__DIR__ . '/../' . $photoPath)):
+                            ?>
+                                <div class="me-3">
+                                    <img src="<?php echo BASE_URL . '/' . htmlspecialchars($photoPath); ?>" alt="ID Photo" class="rounded-circle" style="width:64px;height:64px;object-fit:cover;" />
+                                </div>
+                            <?php else: ?>
+                                <div class="avatar-lg me-3">
+                                    <?php 
+                                    $firstName = $userRecord['first_name'] ?? ($_SESSION['first_name'] ?? 'U');
+                                    echo htmlspecialchars(strtoupper(substr($firstName, 0, 1))); 
+                                    ?>
+                                </div>
+                            <?php endif; ?>
+                                <div>
+                                    <h6 class="mb-1">
+                                        <?php 
+                                        $fullName = trim(($userRecord['first_name'] ?? $_SESSION['first_name'] ?? '') . ' ' . ($userRecord['last_name'] ?? $_SESSION['last_name'] ?? ''));
+                                        echo htmlspecialchars($fullName ?: 'Student User'); 
+                                        ?>
+                                    </h6>
+                                    <div class="small text-muted"><?php echo htmlspecialchars($userRecord['email'] ?? ''); ?></div>
+                                    <span class="badge bg-primary">Student</span>
+                                </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-12">
+                        <p class="mb-1"><strong><i class="fas fa-envelope me-2"></i>Contact Email:</strong></p>
+                        <p class="text-muted"><?php echo htmlspecialchars($userRecord['email'] ?? 'Not Available'); ?></p>
+                    </div>
+                    <div class="col-md-6 col-12">
+                        <p class="mb-1"><strong><i class="fas fa-id-card me-2"></i>Student ID:</strong></p>
+                        <p class="text-muted"><?php echo htmlspecialchars($userRecord['student_id'] ?? 'Not Available'); ?></p>
+                    </div>
+                    <div class="col-md-6 col-12">
+                        <p class="mb-1"><strong><i class="fas fa-school me-2"></i>School:</strong></p>
+                        <p class="text-muted"><?php echo htmlspecialchars($school['name'] ?? 'Not Available'); ?></p>
+                    </div>
+                    <div class="col-md-6 col-12">
+                        <p class="mb-1"><strong><i class="fas fa-calendar me-2"></i>Joined:</strong></p>
+                        <p class="text-muted"><?php echo formatDate($userRecord['created_at'] ?? date('Y-m-d')); ?></p>
+                    </div>
+                    <div class="col-12">
+                        <hr>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <p class="mb-0"><strong>Account Status:</strong></p>
+                                <?php 
+                                $status = $userRecord['status'] ?? 'inactive';
+                                $statusClass = $status === 'active' ? 'bg-success' : 'bg-danger';
+                                ?>
+                                <span class="badge <?php echo $statusClass; ?>">
+                                    <i class="fas <?php echo $status === 'active' ? 'fa-check-circle' : 'fa-times-circle'; ?> me-1"></i>
+                                    <?php echo ucfirst($status); ?>
+                                </span>
+                            </div>
+                            <div class="text-end">
+                                <p class="mb-0"><strong>Submitted Reports:</strong></p>
+                                <small class="text-muted"><?php echo $stats['total_reports']; ?> reports</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     
     <!-- Quick Actions & Tips -->
-    <div class="col-lg-4">
-        <!-- Quick Actions -->
+    <div class="col-lg-4 col-12">
+        <!-- Report Actions -->
         <div class="card mb-4">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                    <i class="fas fa-bolt me-2"></i>Report Actions
                 </h6>
             </div>
             <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="submit_report.php" class="btn btn-primary btn-sm">
+                <div class="d-grid">
+                    <a href="submit_report.php" class="btn btn-primary">
                         <i class="fas fa-plus me-1"></i>Submit New Report
-                    </a>
-                    <a href="my_reports.php" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-file-alt me-1"></i>View My Reports
                     </a>
                 </div>
             </div>
@@ -175,7 +243,7 @@ require_once '../includes/header.php';
                 <ul class="list-unstyled mb-0">
                     <li class="mb-2">
                         <i class="fas fa-check text-success me-2"></i>
-                        <small>Upload PDF, DOC, or DOCX files only</small>
+                        <small>PDF, DOC, DOCX, JPG, JPEG, PNG, GIF, MP4, MOV, AVI, WMV, MKV files allowed</small>
                     </li>
                     <li class="mb-2">
                         <i class="fas fa-check text-success me-2"></i>
@@ -220,10 +288,6 @@ require_once '../includes/header.php';
                 <div class="mb-2">
                     <span class="status-badge status-rejected me-2">Rejected</span>
                     <small>Needs major revision</small>
-                </div>
-                <div class="mb-0">
-                    <span class="status-badge status-revision_required me-2">Revision Required</span>
-                    <small>Minor changes needed</small>
                 </div>
             </div>
         </div>

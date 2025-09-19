@@ -86,6 +86,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($success) {
                 logActivity($db, $_SESSION['user_id'], 'admin', 'update_school', "Updated school ID: $schoolId");
+                // Send email notification to school
+                require_once __DIR__ . '/../config/mail.php';
+                $subject = "Your school information has been updated";
+                $body = "<p>Hello,</p><p>Your school information for <strong>{$name}</strong> has been updated by the system administrator.</p><p>If you did not request this change, please contact support.</p>";
+                sendMail($email, $subject, $body);
                 $message = 'School updated successfully!';
                 $messageType = 'success';
             } else {

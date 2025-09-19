@@ -8,20 +8,22 @@ $schoolName = $_SESSION['school_name'];
 
 // Get school statistics
 $stats = [
-    'total_reports' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ?", [$schoolId])['count'],
-    'pending_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'submitted'", [$schoolId])['count'],
-    'under_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'under_review'", [$schoolId])['count'],
-    'approved' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'approved'", [$schoolId])['count'],
-    'rejected' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'rejected'", [$schoolId])['count'],
-    'revision_required' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'revision_required'", [$schoolId])['count']
+    'total_reports' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND deleted_at IS NULL", [$schoolId])['count'],
+    'pending_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'submitted' AND deleted_at IS NULL", [$schoolId])['count'],
+    'under_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'under_review' AND deleted_at IS NULL", [$schoolId])['count'],
+    'approved' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'approved' AND deleted_at IS NULL", [$schoolId])['count'],
+    'rejected' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'rejected' AND deleted_at IS NULL", [$schoolId])['count'],
+    'revision_required' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'revision_required' AND deleted_at IS NULL", [$schoolId])['count']
 ];
+// Count students registered to this school
+$stats['students'] = $db->fetchOne("SELECT COUNT(*) as count FROM users WHERE school_id = ? AND role = 'student'", [$schoolId])['count'];
 
 // Get recent reports
 $recentReports = $db->fetchAll(
     "SELECT r.*, u.first_name, u.last_name, u.student_id 
      FROM reports r 
      JOIN users u ON r.student_id = u.id 
-     WHERE r.school_id = ? 
+     WHERE r.school_id = ? AND r.deleted_at IS NULL 
      ORDER BY r.submission_date DESC 
      LIMIT 10",
     [$schoolId]
@@ -33,7 +35,7 @@ $monthlyStats = $db->fetchAll(
         DATE_FORMAT(submission_date, '%Y-%m') as month,
         COUNT(*) as count
      FROM reports 
-     WHERE school_id = ? AND submission_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+     WHERE school_id = ? AND submission_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH) AND deleted_at IS NULL
      GROUP BY DATE_FORMAT(submission_date, '%Y-%m')
      ORDER BY month DESC",
     [$schoolId]
@@ -41,6 +43,14 @@ $monthlyStats = $db->fetchAll(
 
 require_once '../includes/header.php';
 ?>
+
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+</style>
 
 <div class="row mb-4">
     <div class="col">
@@ -60,6 +70,10 @@ require_once '../includes/header.php';
             <a href="analytics.php" class="btn btn-success">
                 <i class="fas fa-chart-bar me-1"></i>Analytics
             </a>
+            <button class="btn btn-outline-secondary" type="button" disabled>
+                <i class="fas fa-users me-1"></i>Students
+                <span class="badge bg-primary ms-2"><?php echo $stats['students']; ?></span>
+            </button>
         </div>
     </div>
 </div>
@@ -74,7 +88,7 @@ require_once '../includes/header.php';
         <p>Total Reports</p>
     </div>
     
-    <div class="dashboard-card" style="background: linear-gradient(135deg, var(--warning-color) 0%, #F97316 100%);">
+    <div class="dashboard-card">
         <div class="icon">
             <i class="fas fa-clock"></i>
         </div>
@@ -82,7 +96,7 @@ require_once '../includes/header.php';
         <p>Pending Review</p>
     </div>
     
-    <div class="dashboard-card" style="background: linear-gradient(135deg, var(--accent-color) 0%, #8B5CF6 100%);">
+    <div class="dashboard-card" >
         <div class="icon">
             <i class="fas fa-eye"></i>
         </div>
@@ -90,7 +104,7 @@ require_once '../includes/header.php';
         <p>Under Review</p>
     </div>
     
-    <div class="dashboard-card" style="background: linear-gradient(135deg, var(--secondary-color) 0%, #10B981 100%);">
+    <div class="dashboard-card"">
         <div class="icon">
             <i class="fas fa-check-circle"></i>
         </div>
@@ -162,15 +176,9 @@ require_once '../includes/header.php';
                 </h6>
             </div>
             <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="view_reports.php?status=submitted" class="btn btn-warning btn-sm">
-                        <i class="fas fa-clock me-1"></i>Review Pending (<?php echo $stats['pending_review']; ?>)
-                    </a>
-                    <a href="view_reports.php?status=under_review" class="btn btn-info btn-sm">
-                        <i class="fas fa-eye me-1"></i>Under Review (<?php echo $stats['under_review']; ?>)
-                    </a>
-                    <a href="view_reports.php" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-file-alt me-1"></i>All Reports
+                <div class="d-grid">
+                    <a href="analytics.php" class="btn btn-primary">
+                        <i class="fas fa-chart-bar me-1"></i>View Analytics
                     </a>
                 </div>
             </div>
@@ -216,11 +224,11 @@ require_once '../includes/header.php';
                 
                 <div class="mb-0">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <small>Needs Revision</small>
-                        <small class="text-secondary fw-bold"><?php echo $stats['revision_required']; ?></small>
+                        <small>Rejected</small>
+                        <small class="text-secondary fw-bold"><?php echo $stats['rejected']; ?></small>
                     </div>
                     <div class="progress mb-2" style="height: 6px;">
-                        <div class="progress-bar bg-secondary" style="width: <?php echo $stats['total_reports'] > 0 ? ($stats['revision_required'] / $stats['total_reports']) * 100 : 0; ?>%"></div>
+                        <div class="progress-bar bg-secondary" style="width: <?php echo $stats['total_reports'] > 0 ? ($stats['rejected'] / $stats['total_reports']) * 100 : 0; ?>%"></div>
                     </div>
                 </div>
             </div>

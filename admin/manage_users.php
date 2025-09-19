@@ -9,7 +9,7 @@ $messageType = '';
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    
+
     if ($action === 'add_user') {
         $username = sanitizeInput($_POST['username']);
         $email = sanitizeInput($_POST['email']);
@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $role = $_POST['role'];
         $studentId = sanitizeInput($_POST['student_id'] ?? '');
         $schoolId = (int)($_POST['school_id'] ?? 0);
-        
+
         if (empty($username) || empty($email) || empty($password) || empty($firstName) || empty($lastName) || empty($role)) {
             $message = 'Please fill in all required fields.';
             $messageType = 'error';
@@ -35,7 +35,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "SELECT id FROM users WHERE username = ? OR email = ?",
                 [$username, $email]
             );
-            
             if ($existing) {
                 $message = 'Username or email already exists.';
                 $messageType = 'error';
@@ -48,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $messageType = 'error';
                     }
                 }
-                
+
                 if ($messageType !== 'error') {
                     $userData = [
                         'username' => $username,
@@ -60,9 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'student_id' => $role === 'student' ? $studentId : null,
                         'school_id' => $role === 'student' ? $schoolId : null
                     ];
-                    
+
                     $userId = $db->insert('users', $userData);
-                    
+
                     if ($userId) {
                         logActivity($db, $_SESSION['user_id'], 'admin', 'add_user', "Added $role user: $username");
                         $message = 'User added successfully!';
@@ -84,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $studentId = sanitizeInput($_POST['student_id'] ?? '');
         $schoolId = (int)($_POST['school_id'] ?? 0);
         $status = $_POST['status'];
-        
+
         if (empty($username) || empty($email) || empty($firstName) || empty($lastName) || empty($role)) {
             $message = 'Please fill in all required fields.';
             $messageType = 'error';
@@ -97,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ?",
                 [$username, $email, $userId]
             );
-            
+
             if ($existing) {
                 $message = 'Username or email already exists.';
                 $messageType = 'error';
@@ -112,14 +111,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'school_id' => $role === 'student' ? $schoolId : null,
                     'status' => $status
                 ];
-                
+
                 // If password is provided, hash and include it
                 if (!empty($_POST['password'])) {
                     $updateData['password'] = hashPassword($_POST['password']);
                 }
-                
+
                 $success = $db->update('users', $updateData, 'id = ?', [$userId]);
-                
+
                 if ($success) {
                     logActivity($db, $_SESSION['user_id'], 'admin', 'update_user', "Updated user ID: $userId");
                     $message = 'User updated successfully!';
@@ -132,13 +131,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'delete_user') {
         $userId = (int)$_POST['user_id'];
-        
+
         // Check if user has reports
         $reportCount = $db->fetchOne(
             "SELECT COUNT(*) as count FROM reports WHERE student_id = ?",
             [$userId]
         )['count'];
-        
+
         if ($reportCount > 0) {
             $message = 'Cannot delete user with existing reports. Set status to inactive instead.';
             $messageType = 'error';
@@ -147,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'error';
         } else {
             $success = $db->delete('users', 'id = ?', [$userId]);
-            
+
             if ($success) {
                 logActivity($db, $_SESSION['user_id'], 'admin', 'delete_user', "Deleted user ID: $userId");
                 $message = 'User deleted successfully!';
@@ -405,6 +404,30 @@ require_once '../includes/header.php';
                         <?php foreach ($users as $user): ?>
                             <tr>
                                 <td>
+                                    <div class="mb-2">
+                                        <?php
+                                        $photoPath = $user['id_photo_path'] ?? '';
+                                        $absolutePhotoPath = '';
+                                        if ($photoPath) {
+                                            $absolutePhotoPath = __DIR__ . '/../' . $photoPath;
+                                        }
+                                        if ($photoPath) {
+                                            // Use the global image viewer for stability instead of per-user modals
+                                            $safePath = htmlspecialchars($photoPath);
+                                            echo '<div class="text-center mb-1">';
+                                            if (file_exists($absolutePhotoPath)) {
+                                                echo '<a href="javascript:void(0);" onclick="showGlobalImage(\'../' . $safePath . '\', \'Student ID Photo\')">';
+                                                echo '<img src="../' . $safePath . '" alt="ID Photo" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid #007bff;box-shadow:0 2px 8px rgba(0,0,0,0.10);margin-bottom:4px;cursor:pointer;" />';
+                                                echo '</a>';
+                                            } else {
+                                                // Still show the thumbnail but indicate missing file
+                                                echo '<img src="../' . $safePath . '" alt="ID Photo" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid #007bff;box-shadow:0 2px 8px rgba(0,0,0,0.10);margin-bottom:4px;opacity:0.6;" />';
+                                                echo '<div class="text-danger small">ID photo not found</div>';
+                                            }
+                                            echo '</div>';
+                                        }
+                                        ?>
+                                    </div>
                                     <div>
                                         <h6 class="mb-1"><?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></h6>
                                         <small class="text-muted">

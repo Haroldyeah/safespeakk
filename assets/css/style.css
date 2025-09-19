@@ -69,7 +69,7 @@ body {
 /* Layout */
 .main-content {
     min-height: calc(100vh - 200px);
-    padding-top: 20px;
+    padding-top: 10px;
 }
 
 .container-fluid {
@@ -83,6 +83,15 @@ body {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     margin-bottom: 20px;
     transition: all 0.3s ease;
+}
+
+/* Dashboard header spacing */
+.row.mb-4 {
+    margin-bottom: 1rem !important;
+}
+
+.row.mb-4 h1 {
+    margin-bottom: 0.5rem !important;
 }
 
 .card:hover {
@@ -120,7 +129,7 @@ body {
     right: 0;
     width: 100px;
     height: 100px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(180, 175, 175, 0.1);
     border-radius: 50%;
     transform: translate(30px, -30px);
 }
@@ -385,21 +394,76 @@ footer {
 }
 
 /* Responsive Design */
-@media (max-width: 768px) {
+@media (max-width: 1200px) {
+    .container-fluid {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+    }
+}
+
+@media (max-width: 992px) {
     .main-content {
-        padding-top: 10px;
+        padding-left: 0;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+    }
+    
+    .dashboard-card h3 {
+        font-size: 2rem;
+    }
+    
+    .dashboard-card .icon {
+        font-size: 1.6rem;
+    }
+    
+    .card-header {
+        padding: 16px;
     }
     
     .card-body {
         padding: 16px;
     }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        padding-top: 10px;
+    }
+    
+    .container-fluid {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+    
+    .card-body {
+        padding: 14px;
+    }
     
     .dashboard-card {
-        padding: 20px;
+        padding: 16px;
+        margin-bottom: 16px;
     }
     
     .dashboard-card h3 {
-        font-size: 2rem;
+        font-size: 1.6rem;
+    }
+    
+    .dashboard-card p {
+        font-size: 0.9rem;
+    }
+    
+    .dashboard-card .icon {
+        font-size: 1.4rem;
+        width: 32px;
+        height: 32px;
     }
     
     .auth-card {
@@ -410,18 +474,452 @@ footer {
     .table-responsive {
         border-radius: 12px;
     }
+    
+    /* Mobile navigation improvements */
+    .navbar-toggler {
+        border: none;
+        padding: 4px 8px;
+  
+    }
+    
+  
+    .navbar-collapse {
+ 
+        border-radius: 8px;
+        margin-top: 8px;
+        padding: 16px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    .navbar-nav .nav-link {
+        padding: 12px 16px !important;
+        border-radius: 6px;
+        margin: 4px 0;
+    }
+    
+    /* Mobile form improvements */
+    .form-control, .form-select {
+        font-size: 16px; /* Prevents zoom on iOS */
+        padding: 14px 16px;
+    }
+    
+    .btn {
+        padding: 14px 20px;
+        font-size: 16px;
+    }
+    
+    .btn-sm {
+        padding: 10px 16px;
+        font-size: 14px;
+    }
+    
+    /* Mobile card improvements */
+    .card {
+        margin-bottom: 16px;
+    }
+    
+    .card-header {
+        padding: 16px;
+        font-size: 0.95rem;
+    }
+    
+    .card-header h5 {
+        font-size: 1rem;
+    }
+    
+    /* Mobile list improvements */
+    .list-group-item {
+        padding: 12px 16px;
+    }
+    
+    .list-group-item h6 {
+        font-size: 0.95rem;
+        margin-bottom: 4px;
+    }
+    
+    .list-group-item p {
+        font-size: 0.85rem;
+        margin-bottom: 2px;
+    }
+    
+    .list-group-item small {
+        font-size: 0.8rem;
+    }
+    
+    /* Mobile status badges */
+    .status-badge {
+        padding: 4px 8px;
+        font-size: 0.75rem;
+    }
+    
+    /* Mobile profile section */
+    .avatar-lg {
+        width: 48px;
+        height: 48px;
+        font-size: 18px;
+    }
+    
+    .profile-info h6 {
+        font-size: 0.95rem;
+    }
+    
+    .profile-info .text-muted {
+        font-size: 0.8rem;
+    }
+    
+    /* Mobile file upload */
+    .file-upload-area {
+        padding: 24px 16px;
+    }
+    
+    .file-upload-icon {
+        font-size: 2.5rem;
+    }
+    
+    /* Mobile table improvements */
+    .table thead th, .table tbody td {
+        padding: 8px;
+        font-size: 0.85rem;
+    }
+    
+    .table tbody td img {
+        max-width: 40px;
+        max-height: 40px;
+    }
+    
+    /* Mobile modal improvements */
+    .modal-dialog {
+        max-width: 95%;
+        margin: 0.5rem;
+    }
+    
+    .modal-content {
+        border-radius: 12px;
+    }
+    
+    .modal-header {
+        padding: 16px;
+    }
+    
+    .modal-body {
+        padding: 16px;
+    }
+    
+    .modal-footer {
+        padding: 12px 16px;
+    }
+    
+    /* Mobile button groups */
+    .d-flex.gap-3, .d-flex.gap-2 {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    
+    .d-flex.gap-3 .btn, .d-flex.gap-2 .btn {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+    
+    /* Mobile spacing adjustments */
+    .mb-4 {
+        margin-bottom: 1rem !important;
+    }
+    
+    .mb-3 {
+        margin-bottom: 0.75rem !important;
+    }
+    
+    .py-4 {
+        padding-top: 1.5rem !important;
+        padding-bottom: 1.5rem !important;
+    }
+    
+    /* Mobile text sizing */
+    h1, .h1 { font-size: 1.75rem; }
+    h2, .h2 { font-size: 1.5rem; }
+    h3, .h3 { font-size: 1.25rem; }
+    h4, .h4 { font-size: 1.1rem; }
+    h5, .h5 { font-size: 1rem; }
+    h6, .h6 { font-size: 0.9rem; }
+    
+    /* Mobile touch improvements */
+    .btn, .nav-link, .dropdown-item {
+        min-height: 44px; /* iOS recommended touch target size */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .btn-sm {
+        min-height: 36px;
+    }
+    
+    /* Mobile form improvements */
+    .form-control, .form-select {
+        min-height: 44px;
+    }
+    
+    /* Mobile card touch improvements */
+    .card {
+        touch-action: manipulation;
+    }
+    
+    .list-group-item {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+    
+    /* Mobile status badge improvements */
+    .status-badge {
+        min-height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* Mobile spacing for better readability */
+    .mb-2 { margin-bottom: 0.75rem !important; }
+    .mb-3 { margin-bottom: 1rem !important; }
+    .mb-4 { margin-bottom: 1.25rem !important; }
+    .mb-5 { margin-bottom: 1.5rem !important; }
+    
+    .mt-2 { margin-top: 0.75rem !important; }
+    .mt-3 { margin-top: 1rem !important; }
+    .mt-4 { margin-top: 1.25rem !important; }
+    .mt-5 { margin-top: 1.5rem !important; }
+    
+    /* Mobile image responsiveness */
+    img {
+        max-width: 100%;
+        height: auto;
+    }
+    
+    /* Mobile table improvements */
+    .table-responsive {
+        overflow-x: auto;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Mobile dropdown improvements */
+    .dropdown-menu {
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        border: none;
+    }
+    
+    .dropdown-item {
+        padding: 12px 16px;
+        font-size: 0.9rem;
+    }
+    
+    /* Mobile alert improvements */
+    .alert {
+        border-radius: 8px;
+        margin-bottom: 16px;
+        padding: 12px 16px;
+    }
+    
+    /* Mobile badge improvements */
+    .badge {
+        font-size: 0.75rem;
+        padding: 6px 10px;
+    }
 }
 
 @media (max-width: 576px) {
     .container-fluid {
-        padding-left: 15px;
-        padding-right: 15px;
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .dashboard-card {
+        padding: 12px;
+    }
+    
+    .dashboard-card h3 {
+        font-size: 1.4rem;
+    }
+    
+    .dashboard-card p {
+        font-size: 0.85rem;
+    }
+    
+    .card-body {
+        padding: 12px;
+    }
+    
+    .card-header {
+        padding: 12px;
     }
     
     .btn-group-sm .btn {
-        padding: 6px 12px;
+        padding: 8px 12px;
+        font-size: 0.85rem;
+    }
+    
+    .btn {
+        padding: 12px 16px;
+        font-size: 15px;
+    }
+    
+    .form-control, .form-select {
+        padding: 12px 14px;
+        font-size: 16px;
+    }
+    
+    .navbar-brand {
+        font-size: 1.1rem;
+    }
+    
+    .list-group-item {
+        padding: 10px 12px;
+    }
+    
+    .table thead th, .table tbody td {
+        padding: 6px;
         font-size: 0.8rem;
     }
+    
+    .modal-dialog {
+        max-width: 98%;
+        margin: 0.25rem;
+    }
+    
+    .auth-card {
+        margin: 10px;
+        padding: 24px 16px;
+    }
+    
+    .file-upload-area {
+        padding: 20px 12px;
+    }
+    
+    .file-upload-icon {
+        font-size: 2rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .container-fluid {
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+    
+    .dashboard-card h3 {
+        font-size: 1.2rem;
+    }
+    
+    .dashboard-card p {
+        font-size: 0.8rem;
+    }
+    
+    .card-body {
+        padding: 10px;
+    }
+    
+    .card-header {
+        padding: 10px;
+    }
+    
+    .btn {
+        padding: 10px 14px;
+        font-size: 14px;
+    }
+    
+    .form-control, .form-select {
+        padding: 10px 12px;
+    }
+    
+    .list-group-item {
+        padding: 8px 10px;
+    }
+    
+    .table thead th, .table tbody td {
+        padding: 4px;
+        font-size: 0.75rem;
+    }
+    
+    .modal-dialog {
+        max-width: 100%;
+        margin: 0;
+    }
+    
+    .auth-card {
+        margin: 5px;
+        padding: 20px 12px;
+    }
+}
+
+/* Student-specific responsive tweaks */
+@media (max-width: 992px) {
+    /* Slightly reduce dashboard card sizes on medium screens */
+    .dashboard-card h3 {
+        font-size: 2rem;
+    }
+    .dashboard-card .icon {
+        font-size: 1.6rem;
+    }
+    .card-header {
+        padding: 14px;
+    }
+}
+
+@media (max-width: 768px) {
+    /* Make cards and containers breathe on small devices */
+    .container-fluid {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .card-body {
+        padding: 14px;
+    }
+
+    /* Reduce dashboard card heading size */
+    .dashboard-card h3 {
+        font-size: 1.6rem;
+    }
+
+    /* File upload area sizing */
+    .file-upload-area {
+        padding: 20px 12px;
+    }
+
+    /* Make recent report list items more compact */
+    .list-group-item h6 { font-size: 1rem; }
+    .list-group-item p.small { font-size: 0.85rem; }
+
+    /* Responsive adjustments for My Reports table: Now scrolls horizontally */
+
+    .table thead th, .table tbody td {
+        padding: 10px;
+        font-size: 0.95rem;
+    }
+
+    .table tbody td img {
+        max-width: 60px;
+        max-height: 60px;
+        border-radius: 6px;
+    }
+
+    /* Modal sizing on small screens */
+    .modal-dialog {
+        max-width: 95%;
+        margin: 0.5rem;
+    }
+
+    /* Ensure action buttons are full-width and stacked when needed */
+    .d-flex.gap-3, .d-flex.gap-2 {
+        flex-direction: column !important;
+    }
+    .d-flex.gap-3 .btn, .d-flex.gap-2 .btn { width: 100%; }
 }
 
 /* Loading States */
@@ -460,6 +958,28 @@ footer {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }
 
+/* Profile Section */
+.avatar-lg {
+    width: 64px;
+    height: 64px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.profile-info p {
+    margin-bottom: 0.5rem;
+}
+
+.profile-info .text-muted {
+    font-size: 0.875rem;
+}
+
 /* Academic Theme Enhancements */
 .academic-section {
     background: white;
@@ -494,4 +1014,42 @@ footer {
 .report-item:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     border-color: var(--primary-color);
+}
+
+.status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-submitted { background-color: #EBF8FF; color: #1E40AF; }
+.status-under_review { background-color: #FEF3C7; color: #B45309; }
+.status-approved { background-color: #D1FAE5; color: #047857; }
+.status-rejected { background-color: #FEE2E2; color: #B91C1C; }
+.status-revision_required { background-color: #EDE9FE; color: #6B21A8; }
+
+.navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(55, 65, 81, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+#global-alert-container {
+    position: fixed;
+    top: 20px; /* Adjust as needed */
+    left: 280px; /* Start after the sidebar */
+    right: 0;    /* Extend to the right edge */
+    margin-left: auto; /* Center horizontally within the defined left/right bounds */
+    margin-right: auto;
+    transform: none; /* Remove translateX as margin:auto handles centering */
+    z-index: 9999; /* Very high z-index */
+    width: 100%;
+    max-width: 500px; /* Limit width for better readability */
+    padding: 0 15px; /* Add some padding on smaller screens */
+    pointer-events: none; /* Allow clicks to pass through container */
+}
+
+#global-alert-container .alert {
+    pointer-events: auto; /* Re-enable clicks for the alert itself */
+    margin-bottom: 10px; /* Space between multiple alerts */
+    text-align: center; /* Center the text within the alert */
 }

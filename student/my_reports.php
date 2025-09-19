@@ -61,10 +61,21 @@ $schools = $db->fetchAll("SELECT id, name FROM schools WHERE status = 'active' O
 $totalPages = ceil($totalReports / $perPage);
 
 require_once '../includes/header.php';
+
+// Helper to convert local file path to web path
+function getWebPath($filePath) {
+    // If already a web path, return as absolute
+    if (strpos($filePath, 'uploads/') === 0) return '/CapstoneTracker/' . $filePath;
+    // Extract filename and prepend uploads/
+    $filename = basename($filePath);
+    return '/CapstoneTracker/uploads/' . $filename;
+}
 ?>
 
-<div class="row mb-4">
-    <div class="col">
+
+
+<div class="row mb-4 align-items-center">
+    <div class="col-12 col-md">
         <h1 class="h3 mb-3">
             <i class="fas fa-file-alt text-primary me-2"></i>
             My Reports
@@ -74,7 +85,7 @@ require_once '../includes/header.php';
             <span class="badge bg-secondary ms-2"><?php echo $totalReports; ?> total</span>
         </p>
     </div>
-    <div class="col-auto">
+    <div class="col-12 col-md-auto mt-3 mt-md-0">
         <a href="submit_report.php" class="btn btn-primary">
             <i class="fas fa-plus me-1"></i>Submit New Report
         </a>
@@ -103,7 +114,6 @@ require_once '../includes/header.php';
                     <option value="under_review" <?php echo $statusFilter === 'under_review' ? 'selected' : ''; ?>>Under Review</option>
                     <option value="approved" <?php echo $statusFilter === 'approved' ? 'selected' : ''; ?>>Approved</option>
                     <option value="rejected" <?php echo $statusFilter === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
-                    <option value="revision_required" <?php echo $statusFilter === 'revision_required' ? 'selected' : ''; ?>>Revision Required</option>
                 </select>
             </div>
             
@@ -174,27 +184,25 @@ require_once '../includes/header.php';
                 <table class="table table-hover mb-0" id="reportsTable">
                     <thead>
                         <tr>
-                            <th>Title</th>
+                            <th>Type of Bullying</th>
+                            <th>Description</th>
                             <th>School</th>
                             <th>Status</th>
+                            <th>Date of Incident</th>
                             <th>Submitted</th>
-                            <th>File Size</th>
-                            <th>Grade</th>
-                            <th>Actions</th>
+                            <th class="text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($reports as $report): ?>
                             <tr class="searchable-row">
                                 <td>
-                                    <div>
-                                        <h6 class="mb-1"><?php echo htmlspecialchars($report['title']); ?></h6>
-                                        <?php if ($report['description']): ?>
-                                            <small class="text-muted">
-                                                <?php echo htmlspecialchars(substr($report['description'], 0, 100)) . (strlen($report['description']) > 100 ? '...' : ''); ?>
-                                            </small>
-                                        <?php endif; ?>
-                                    </div>
+                                    <h6 class="mb-1"><?php echo htmlspecialchars($report['title']); ?></h6>
+                                </td>
+                                <td>
+                                    <small class="text-muted">
+                                        <?php echo nl2br(htmlspecialchars($report['description'])); ?>
+                                    </small>
                                 </td>
                                 <td>
                                     <span class="badge bg-light text-dark">
@@ -203,52 +211,33 @@ require_once '../includes/header.php';
                                 </td>
                                 <td>
                                     <span class="status-badge status-<?php echo $report['status']; ?>">
-                                        <?php echo ucfirst(str_replace('_', ' ', $report['status'])); ?>
+                                        <?php 
+                                        $statusDisplay = [
+                                            'submitted' => 'Submitted',
+                                            'under_review' => 'Under Review',
+                                            'approved' => 'Approved',
+                                            'rejected' => 'Rejected'
+                                        ];
+                                        echo $statusDisplay[$report['status']] ?? $report['status'];
+                                        ?>
                                     </span>
+                                </td>
+                                <td>
+                                    <small><?php echo $report['date_of_incident'] ? formatDate($report['date_of_incident']) : 'N/A'; ?></small>
                                 </td>
                                 <td>
                                     <small><?php echo formatDate($report['submission_date']); ?></small>
                                 </td>
-                                <td>
-                                    <small><?php echo formatFileSize($report['file_size']); ?></small>
-                                </td>
-                                <td>
-                                    <?php if ($report['grade']): ?>
-                                        <span class="badge bg-success">
-                                            <?php echo htmlspecialchars($report['grade']); ?>
-                                        </span>
-                                    <?php else: ?>
-                                        <small class="text-muted">Not graded</small>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button type="button" class="btn btn-outline-primary dropdown-toggle" 
-                                                data-bs-toggle="dropdown">
-                                            Actions
-                                        </button>
-                                        <ul class="dropdown-menu">
-                                            <li>
-                                                <button class="dropdown-item" onclick="viewReportDetails(<?php echo $report['id']; ?>)">
-                                                    <i class="fas fa-eye me-1"></i>View Details
-                                                </button>
-                                            </li>
-                                            <?php if ($report['file_path'] && file_exists($report['file_path'])): ?>
-                                                <li>
-                                                    <a class="dropdown-item" href="download_report.php?id=<?php echo $report['id']; ?>">
-                                                        <i class="fas fa-download me-1"></i>Download
-                                                    </a>
-                                                </li>
-                                            <?php endif; ?>
-                                            <?php if (in_array($report['status'], ['submitted', 'revision_required'])): ?>
-                                                <li><hr class="dropdown-divider"></li>
-                                                <li>
-                                                    <button class="dropdown-item text-danger" onclick="deleteReport(<?php echo $report['id']; ?>)">
-                                                        <i class="fas fa-trash me-1"></i>Delete
-                                                    </button>
-                                                </li>
-                                            <?php endif; ?>
-                                        </ul>
+                                <td class="text-end">
+                                    <div class="btn-group">
+                                        <?php if (in_array($report['status'], ['submitted', 'revision_required'])): ?>
+                                            <a href="edit_report.php?id=<?php echo $report['id']; ?>" class="btn btn-sm btn-outline-secondary" title="Edit Report">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                        <?php endif; ?>
+                                        <a href="view_evidence.php?id=<?php echo $report['id']; ?>" class="btn btn-sm btn-outline-primary" title="View Evidence">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
                                     </div>
                                 </td>
                             </tr>
@@ -361,3 +350,10 @@ function deleteReport(reportId) {
 </script>
 
 <?php require_once '../includes/footer.php'; ?>
+
+<script>
+function showEvidenceModal(imgSrc) {
+    // Use global viewer helper
+    showGlobalImage(imgSrc, 'Evidence Photo');
+}
+</script>

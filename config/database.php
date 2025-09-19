@@ -104,6 +104,7 @@ class Database {
         $sql = "UPDATE {$table} SET {$setClause} WHERE {$where}";
         $params = array_merge($data, $whereParams);
         
+        error_log('SQL: ' . $sql . ' PARAMS: ' . print_r($params, true));
         return $this->query($sql, $params);
     }
     

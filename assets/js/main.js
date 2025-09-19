@@ -64,19 +64,12 @@ function initializeFileUpload() {
 
 function updateFileDisplay(file) {
     const fileUploadArea = document.querySelector('.file-upload-area');
-    const allowedTypes = ['pdf', 'doc', 'docx'];
-    const fileExtension = file.name.split('.').pop().toLowerCase();
-    
-    if (!allowedTypes.includes(fileExtension)) {
-        showAlert('Invalid file type. Please upload PDF, DOC, or DOCX files only.', 'danger');
-        return;
-    }
-    
+    // Remove file type restriction: allow all types supported by backend
     if (file.size > 50 * 1024 * 1024) { // 50MB limit
         showAlert('File size exceeds 50MB limit.', 'danger');
         return;
     }
-    
+
     fileUploadArea.innerHTML = `
         <div class="file-selected">
             <i class="fas fa-file-alt file-upload-icon text-success"></i>
@@ -85,6 +78,7 @@ function updateFileDisplay(file) {
             <small class="text-success">File ready for upload</small>
         </div>
     `;
+    showAlert('File selected successfully!', 'success');
 }
 
 // Form Validation
@@ -214,15 +208,22 @@ function updateReportStatus(reportId, status, button) {
 
 // Utility Functions
 function showAlert(message, type = 'info') {
+    let globalAlertContainer = document.getElementById('global-alert-container');
+    if (!globalAlertContainer) {
+        globalAlertContainer = document.createElement('div');
+        globalAlertContainer.id = 'global-alert-container';
+        document.body.appendChild(globalAlertContainer);
+    }
+
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.setAttribute('role', 'alert');
     alertDiv.innerHTML = `
         ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     `;
     
-    const container = document.querySelector('.container-fluid');
-    container.insertBefore(alertDiv, container.firstChild);
+    globalAlertContainer.appendChild(alertDiv);
     
     // Auto-dismiss after 5 seconds
     setTimeout(() => {

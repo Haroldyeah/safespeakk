@@ -1,42 +1,71 @@
 <?php
-// Start session if not already started
+// ---------------------------
+// Session Handling
+// ---------------------------
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Application configuration
-define('APP_NAME', 'Capstone Report Management System');
+// ---------------------------
+// App Information
+// ---------------------------
+define('APP_NAME', 'SafeSpeak');
 define('APP_VERSION', '1.0.0');
-// Calculate base URL correctly for subdirectories
-$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-$host = $_SERVER['HTTP_HOST'];
-$path = dirname($_SERVER['SCRIPT_NAME']);
-// Remove subdirectory from path if we're in a subdirectory
-$basePath = str_replace('/school', '', str_replace('/admin', '', str_replace('/student', '', $path)));
-define('BASE_URL', $protocol . $host . $basePath);
 
-// File upload configuration
+// ---------------------------
+// Base URL Configuration
+// ---------------------------
+define('BASE_URL', 'http://localhost/CapstoneTracker/');
+
+// ---------------------------
+// Timezone Configuration
+// ---------------------------
+// Set your default timezone here. For a list of supported timezones, see: https://www.php.net/manual/en/timezones.php
+define('TIMEZONE', 'Asia/Manila'); // Example: 'America/New_York', 'Europe/London', 'Asia/Tokyo'
+date_default_timezone_set(TIMEZONE);
+
+// ---------------------------
+// File Upload Configuration
+// ---------------------------
 define('UPLOAD_DIR', __DIR__ . '/../uploads/');
 define('MAX_FILE_SIZE', 50 * 1024 * 1024); // 50MB
-define('ALLOWED_FILE_TYPES', ['pdf', 'doc', 'docx']);
+define('ALLOWED_FILE_TYPES', ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'wmv', 'mkv', 'heic', 'heif']);
 
-// Email configuration (if needed)
-define('SMTP_HOST', 'smtp.gmail.com');
-define('SMTP_PORT', 587);
-define('SMTP_USERNAME', '');
-define('SMTP_PASSWORD', '');
-define('FROM_EMAIL', 'noreply@capstone-system.com');
-define('FROM_NAME', 'Capstone System');
-
-// Create upload directory if it doesn't exist
 if (!file_exists(UPLOAD_DIR)) {
     mkdir(UPLOAD_DIR, 0755, true);
 }
 
-// Include database and functions
+// ---------------------------
+// Email Configuration
+// ---------------------------
+define('SMTP_HOST', 'smtp.gmail.com');
+define('SMTP_PORT', 587);
+define('SMTP_USERNAME', 'haroldarreglado121618@gmail.com'); // Your SMTP username
+define('SMTP_PASSWORD', 'aqqtzxdmeousvgmb'); // Your SMTP password or app password
+define('FROM_EMAIL', 'haroldarreglado121618@gmail.com');
+define('FROM_NAME', 'SafeSpeak');
+
+// ---------------------------
+// Include Core Files
+// ---------------------------
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-// Initialize database connection
+// ---------------------------
+// Initialize Database
+// ---------------------------
 $db = new Database();
+
+// ---------------------------
+// Fallback Helper Functions
+// ---------------------------
+if (!function_exists('verifyPassword')) {
+    function verifyPassword($plainPassword, $hashedPassword) {
+        return password_verify($plainPassword, $hashedPassword);
+    }
+}
+
+// Set default charset
+ini_set('default_charset', 'UTF-8');
+mb_internal_encoding('UTF-8');
 ?>

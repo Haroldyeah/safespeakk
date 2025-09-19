@@ -5,12 +5,12 @@ requireRole('admin');
 
 // Get system-wide statistics
 $stats = [
-    'total_reports' => $db->fetchOne("SELECT COUNT(*) as count FROM reports")['count'],
+    'total_reports' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE deleted_at IS NULL")['count'],
     'total_schools' => $db->fetchOne("SELECT COUNT(*) as count FROM schools WHERE status = 'active'")['count'],
     'total_students' => $db->fetchOne("SELECT COUNT(*) as count FROM users WHERE role = 'student' AND status = 'active'")['count'],
-    'pending_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'submitted'")['count'],
-    'under_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'under_review'")['count'],
-    'approved' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'approved'")['count']
+    'pending_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'submitted' AND deleted_at IS NULL")['count'],
+    'under_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'under_review' AND deleted_at IS NULL")['count'],
+    'approved' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'approved' AND deleted_at IS NULL")['count']
 ];
 
 // Get recent activity
@@ -19,16 +19,18 @@ $recentReports = $db->fetchAll(
      FROM reports r 
      JOIN users u ON r.student_id = u.id 
      JOIN schools s ON r.school_id = s.id 
+     WHERE r.deleted_at IS NULL 
      ORDER BY r.submission_date DESC 
-     LIMIT 8",
+     LIMIT 5",
     []
 );
 
 // Get school statistics
 $schoolStats = $db->fetchAll(
-    "SELECT s.name, s.id, COUNT(r.id) as report_count,
-            SUM(CASE WHEN r.status = 'approved' THEN 1 ELSE 0 END) as approved_count,
-            SUM(CASE WHEN r.status = 'submitted' THEN 1 ELSE 0 END) as pending_count
+    "SELECT s.name, s.id, 
+            COUNT(CASE WHEN r.deleted_at IS NULL THEN r.id END) as report_count,
+            SUM(CASE WHEN r.status = 'approved' AND r.deleted_at IS NULL THEN 1 ELSE 0 END) as approved_count,
+            SUM(CASE WHEN r.status = 'submitted' AND r.deleted_at IS NULL THEN 1 ELSE 0 END) as pending_count
      FROM schools s 
      LEFT JOIN reports r ON s.id = r.school_id 
      WHERE s.status = 'active'
@@ -44,7 +46,7 @@ $monthlyStats = $db->fetchAll(
         DATE_FORMAT(submission_date, '%Y-%m') as month,
         COUNT(*) as total_reports
      FROM reports 
-     WHERE submission_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+     WHERE submission_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH) AND deleted_at IS NULL
      GROUP BY DATE_FORMAT(submission_date, '%Y-%m')
      ORDER BY month DESC 
      LIMIT 12",
@@ -54,7 +56,7 @@ $monthlyStats = $db->fetchAll(
 require_once '../includes/header.php';
 ?>
 
-<div class="row mb-4">
+<div class="row">
     <div class="col">
         <h1 class="h3 mb-3">
             <i class="fas fa-user-shield text-primary me-2"></i>
@@ -169,27 +171,53 @@ require_once '../includes/header.php';
     
     <!-- System Overview -->
     <div class="col-lg-4">
-        <!-- Quick Actions -->
+        <!-- Report Status Distribution -->
         <div class="card mb-4">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                    <i class="fas fa-chart-pie me-2"></i>Report Distribution
                 </h6>
             </div>
             <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="all_reports.php?status=submitted" class="btn btn-warning btn-sm">
-                        <i class="fas fa-clock me-1"></i>Pending Reviews (<?php echo $stats['pending_review']; ?>)
-                    </a>
-                    <a href="all_reports.php?status=under_review" class="btn btn-info btn-sm">
-                        <i class="fas fa-eye me-1"></i>Under Review (<?php echo $stats['under_review']; ?>)
-                    </a>
-                    <a href="manage_schools.php" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-school me-1"></i>Manage Schools
-                    </a>
-                    <a href="manage_users.php" class="btn btn-outline-secondary btn-sm">
-                        <i class="fas fa-users me-1"></i>Manage Users
-                    </a>
+                <?php
+                $total = $stats['total_reports'] > 0 ? $stats['total_reports'] : 1;
+                $pending_percent = ($stats['pending_review'] / $total) * 100;
+                $review_percent = ($stats['under_review'] / $total) * 100;
+                $approved_percent = ($stats['approved'] / $total) * 100;
+                ?>
+                <!-- Status distribution progress bars -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <small class="text-warning">Pending Review</small>
+                        <small class="text-muted"><?php echo $stats['pending_review']; ?> reports</small>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-warning" style="width: <?php echo $pending_percent; ?>%"></div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <small class="text-info">Under Review</small>
+                        <small class="text-muted"><?php echo $stats['under_review']; ?> reports</small>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-info" style="width: <?php echo $review_percent; ?>%"></div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <small class="text-success">Approved</small>
+                        <small class="text-muted"><?php echo $stats['approved']; ?> reports</small>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-success" style="width: <?php echo $approved_percent; ?>%"></div>
+                    </div>
+                </div>
+
+                <div class="text-center mt-3">
+                    <small class="text-muted">Total Reports: <?php echo $stats['total_reports']; ?></small>
                 </div>
             </div>
         </div>

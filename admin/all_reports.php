@@ -1,6 +1,7 @@
 <?php
 $pageTitle = 'All Reports';
 require_once '../config/config.php';
+require_once __DIR__ . '/../config/mail.php';
 requireRole('admin');
 
 // Pagination
@@ -19,7 +20,7 @@ $sortOrder = $_GET['order'] ?? 'DESC';
 $viewReportId = (int)($_GET['id'] ?? 0);
 
 // Valid sort columns
-$validSortColumns = ['submission_date', 'title', 'status', 'first_name', 'school_name'];
+$validSortColumns = ['submission_date', 'title', 'status', 'first_name', 'report_school_name'];
 if (!in_array($sortBy, $validSortColumns)) {
     $sortBy = 'submission_date';
 }
@@ -29,13 +30,16 @@ if (!in_array($sortOrder, ['ASC', 'DESC'])) {
 }
 
 // Build query conditions
-$conditions = ["1=1"];
+$conditions = ["r.deleted_at IS NULL"];
 $params = [];
 
 if ($search) {
-    $conditions[] = "(r.title LIKE ? OR r.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.student_id LIKE ? OR s.name LIKE ?)";
-    $searchParam = "%$search%";
-    $params = array_merge($params, [$searchParam, $searchParam, $searchParam, $searchParam, $searchParam, $searchParam]);
+    $conditions[] = "(r.title LIKE ? OR r.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR s_report.name LIKE ?)";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
 }
 
 if ($statusFilter) {
@@ -50,21 +54,19 @@ if ($schoolFilter) {
 
 $whereClause = implode(' AND ', $conditions);
 
-// Get total count
+// Get total count (join users and schools because search may reference them)
 $totalReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports r 
-     JOIN users u ON r.student_id = u.id 
-     JOIN schools s ON r.school_id = s.id 
-     WHERE $whereClause",
+    "SELECT COUNT(*) as count FROM reports r JOIN users u ON r.student_id = u.id JOIN schools s_report ON r.school_id = s_report.id WHERE $whereClause",
     $params
-)['count'];
+)["count"];
 
 // Get reports
 $reports = $db->fetchAll(
-    "SELECT r.*, u.first_name, u.last_name, u.student_id, u.email, s.name as school_name
+    "SELECT r.*, u.first_name, u.last_name, u.student_id, u.email, s_report.name as report_school_name, s_user.name as registered_school_name, u.school_id as registered_school_id
      FROM reports r 
      JOIN users u ON r.student_id = u.id 
-     JOIN schools s ON r.school_id = s.id 
+     JOIN schools s_report ON r.school_id = s_report.id 
+     LEFT JOIN schools s_user ON u.school_id = s_user.id 
      WHERE $whereClause 
      ORDER BY $sortBy $sortOrder 
      LIMIT $perPage OFFSET $offset",
@@ -78,54 +80,126 @@ $schools = $db->fetchAll("SELECT id, name FROM schools WHERE status = 'active' O
 $viewReport = null;
 if ($viewReportId) {
     $viewReport = $db->fetchOne(
-        "SELECT r.*, u.first_name, u.last_name, u.student_id, u.email, s.name as school_name
+        "SELECT r.*, u.first_name, u.last_name, u.student_id, u.email, s_report.name as report_school_name, s_user.name as registered_school_name, u.school_id as registered_school_id
          FROM reports r 
          JOIN users u ON r.student_id = u.id 
-         JOIN schools s ON r.school_id = s.id 
+         JOIN schools s_report ON r.school_id = s_report.id 
+         LEFT JOIN schools s_user ON u.school_id = s_user.id 
          WHERE r.id = ?",
         [$viewReportId]
     );
+
+    if ($viewReport) {
+        $viewReport['evidence'] = $db->fetchAll(
+            "SELECT * FROM report_evidence WHERE report_id = ?",
+            [$viewReportId]
+        );
+    }
 }
 
-// Handle AJAX requests for status updates
+// Handle AJAX requests for status updates and soft delete
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
+    // Debug log
+    file_put_contents(__DIR__ . '/../debug_admin_status.log', date('Y-m-d H:i:s') . "\nINPUT: " . var_export($input, true) . "\n", FILE_APPEND);
     
     if ($input['action'] === 'update_status') {
         $reportId = (int)$input['report_id'];
         $newStatus = $input['status'];
         $comments = $input['comments'] ?? '';
-        $grade = $input['grade'] ?? null;
-        
-        // Valid status transitions
         $validStatuses = ['submitted', 'under_review', 'approved', 'rejected', 'revision_required'];
+        header('Content-Type: application/json');
         if (!in_array($newStatus, $validStatuses)) {
+            file_put_contents(__DIR__ . '/../debug_admin_status.log', "Invalid status: $newStatus\n", FILE_APPEND);
             echo json_encode(['success' => false, 'message' => 'Invalid status']);
             exit;
         }
-        
-        // Update report
         $updateData = [
             'status' => $newStatus,
             'reviewed_by_admin' => $_SESSION['user_id'],
             'reviewed_at' => date('Y-m-d H:i:s')
         ];
-        
         if ($comments) {
             $updateData['admin_comments'] = $comments;
         }
-        
-        if ($grade && in_array($newStatus, ['approved'])) {
-            $updateData['grade'] = $grade;
-        }
-        
-        $success = $db->update('reports', $updateData, 'id = ?', [$reportId]);
-        
-        if ($success) {
+        // Use named parameter for consistency
+        $success = $db->update('reports', $updateData, 'id = :id', ['id' => $reportId]);
+        file_put_contents(__DIR__ . '/../debug_admin_status.log', "UpdateData: " . var_export($updateData, true) . "\nUpdateResult: " . var_export($success, true) . "\n", FILE_APPEND);
+        if ($success instanceof PDOStatement) {
+            // Fetch student info for email
+            $reportDetails = $db->fetchOne(
+                "SELECT r.title, r.description, u.first_name, u.last_name, u.email FROM reports r JOIN users u ON r.student_id = u.id WHERE r.id = ?",
+                [$reportId]
+            );
+            if ($reportDetails && $reportDetails['email']) {
+                // Fetch SMTP settings for the school associated with the report
+                $schoolIdForReport = $db->fetchOne("SELECT school_id FROM reports WHERE id = ?", [$reportId])['school_id'];
+                $schoolSmtp = $db->fetchOne("SELECT smtp_host, smtp_port, smtp_username, smtp_password, from_email, from_name FROM schools WHERE id = ?", [$schoolIdForReport]);
+
+                require_once __DIR__ . '/../templates/email/load_template.php';
+                $statusLabel = ucfirst(str_replace('_', ' ', $newStatus));
+                $reportUrl = rtrim(BASE_URL, '/') . '/student/view_report.php?id=' . $reportId;
+                $body = load_email_template('report_status_updated.php', [
+                    'studentName' => $reportDetails['first_name'] . ' ' . $reportDetails['last_name'],
+                    'statusLabel' => $statusLabel,
+                    'comments' => $comments,
+                    'title' => $reportDetails['title'],
+                    'reportUrl' => $reportUrl,
+                    'appName' => APP_NAME,
+                    'baseUrl' => BASE_URL
+                ]);
+                $subject = "Report Status Updated: {$statusLabel}";
+
+                try {
+                    sendMail(
+                        $reportDetails['email'],
+                        $subject,
+                        $body,
+                        $schoolSmtp['from_email'],
+                        $schoolSmtp['from_name']
+                    );
+                } catch (Exception $e) {
+                    error_log('Mail Error: ' . $e->getMessage());
+                }
+            }
             logActivity($db, $_SESSION['user_id'], 'admin', 'update_report_status', "Updated report #$reportId status to $newStatus");
             echo json_encode(['success' => true, 'message' => 'Status updated successfully']);
+            exit;
         } else {
             echo json_encode(['success' => false, 'message' => 'Failed to update status']);
+            exit;
+        }
+    }
+    
+    // Handle soft delete
+    if ($input['action'] === 'soft_delete') {
+        $reportIds = $input['report_ids'] ?? [];
+        header('Content-Type: application/json');
+        
+        if (empty($reportIds)) {
+            echo json_encode(['success' => false, 'message' => 'No reports selected']);
+            exit;
+        }
+        
+        $deletedCount = 0;
+        foreach ($reportIds as $reportId) {
+            $reportId = (int)$reportId;
+            $updateData = [
+                'deleted_at' => date('Y-m-d H:i:s'),
+                'deleted_by_admin' => $_SESSION['user_id']
+            ];
+            
+            $success = $db->update('reports', $updateData, 'id = :id', ['id' => $reportId]);
+            if ($success instanceof PDOStatement) {
+                $deletedCount++;
+                logActivity($db, $_SESSION['user_id'], 'admin', 'soft_delete_report', "Soft deleted report #$reportId");
+            }
+        }
+        
+        if ($deletedCount > 0) {
+            echo json_encode(['success' => true, 'message' => "$deletedCount report(s) deleted successfully"]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete reports']);
         }
         exit;
     }
@@ -196,9 +270,9 @@ require_once '../includes/header.php';
             <div class="col-md-2">
                 <select class="form-select" name="sort">
                     <option value="submission_date" <?php echo $sortBy === 'submission_date' ? 'selected' : ''; ?>>Sort by Date</option>
-                    <option value="title" <?php echo $sortBy === 'title' ? 'selected' : ''; ?>>Sort by Title</option>
+                    <option value="title" <?php echo $sortBy === 'title' ? 'selected' : ''; ?>>Sort by Type</option>
                     <option value="first_name" <?php echo $sortBy === 'first_name' ? 'selected' : ''; ?>>Sort by Student</option>
-                    <option value="school_name" <?php echo $sortBy === 'school_name' ? 'selected' : ''; ?>>Sort by School</option>
+                    <option value="report_school_name" <?php echo $sortBy === 'report_school_name' ? 'selected' : ''; ?>>Sort by School</option>
                     <option value="status" <?php echo $sortBy === 'status' ? 'selected' : ''; ?>>Sort by Status</option>
                 </select>
             </div>
@@ -220,17 +294,27 @@ require_once '../includes/header.php';
 <!-- Reports List -->
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">
-            Report List
-            <?php if ($search || $statusFilter || $schoolFilter): ?>
-                <small class="text-muted">
-                    (<?php echo $totalReports; ?> results found)
-                </small>
+        <div class="d-flex align-items-center">
+            <h5 class="mb-0 me-3">
+                Report List
+                <?php if ($search || $statusFilter || $schoolFilter): ?>
+                    <small class="text-muted">
+                        (<?php echo $totalReports; ?> results found)
+                    </small>
+                <?php endif; ?>
+            </h5>
+            <?php if (!empty($reports)): ?>
+                <button class="btn btn-sm btn-outline-primary" id="selectAllBtn">
+                    <i class="fas fa-check-square me-1"></i>Select All
+                </button>
             <?php endif; ?>
-        </h5>
+        </div>
         
         <?php if (!empty($reports)): ?>
             <div class="btn-group">
+                <button class="btn btn-sm btn-outline-danger" id="deleteSelectedBtn" disabled>
+                    <i class="fas fa-trash-alt me-1"></i>Delete Selected
+                </button>
                 <button class="btn btn-sm btn-outline-primary" onclick="exportTable('reportsTable', 'all_reports')">
                     <i class="fas fa-download me-1"></i>Export
                 </button>
@@ -258,8 +342,13 @@ require_once '../includes/header.php';
                     <thead>
                         <tr>
                             <th>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="selectAllCheckbox">
+                                </div>
+                            </th>
+                            <th>
                                 <a href="?sort=title&order=<?php echo $sortBy === 'title' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>" class="text-decoration-none text-white">
-                                    Title 
+                                    Type of Bullying 
                                     <?php if ($sortBy === 'title'): ?>
                                         <i class="fas fa-sort-<?php echo $sortOrder === 'ASC' ? 'up' : 'down'; ?>"></i>
                                     <?php endif; ?>
@@ -274,9 +363,9 @@ require_once '../includes/header.php';
                                 </a>
                             </th>
                             <th>
-                                <a href="?sort=school_name&order=<?php echo $sortBy === 'school_name' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>" class="text-decoration-none text-white">
+                                <a href="?sort=report_school_name&order=<?php echo $sortBy === 'report_school_name' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>" class="text-decoration-none text-white">
                                     School 
-                                    <?php if ($sortBy === 'school_name'): ?>
+                                    <?php if ($sortBy === 'report_school_name'): ?>
                                         <i class="fas fa-sort-<?php echo $sortOrder === 'ASC' ? 'up' : 'down'; ?>"></i>
                                     <?php endif; ?>
                                 </a>
@@ -297,13 +386,17 @@ require_once '../includes/header.php';
                                     <?php endif; ?>
                                 </a>
                             </th>
-                            <th>Grade</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($reports as $report): ?>
                             <tr class="searchable-row">
+                                <td>
+                                    <div class="form-check">
+                                        <input class="form-check-input report-checkbox" type="checkbox" value="<?php echo $report['id']; ?>">
+                                    </div>
+                                </td>
                                 <td>
                                     <div>
                                         <h6 class="mb-1"><?php echo htmlspecialchars($report['title']); ?></h6>
@@ -323,8 +416,11 @@ require_once '../includes/header.php';
                                 </td>
                                 <td>
                                     <span class="badge bg-light text-dark">
-                                        <?php echo htmlspecialchars($report['school_name']); ?>
+                                        <?php echo htmlspecialchars($report['report_school_name']); ?>
                                     </span>
+                                    <?php if ($report['school_id'] !== $report['registered_school_id']): ?>
+                                        <br><span class="badge bg-warning text-dark mt-1">Registered: <?php echo htmlspecialchars($report['registered_school_name'] ?? 'N/A'); ?></span>
+                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <span class="status-badge status-<?php echo $report['status']; ?>">
@@ -333,15 +429,6 @@ require_once '../includes/header.php';
                                 </td>
                                 <td>
                                     <small><?php echo formatDate($report['submission_date']); ?></small>
-                                </td>
-                                <td>
-                                    <?php if ($report['grade']): ?>
-                                        <span class="badge bg-success">
-                                            <?php echo htmlspecialchars($report['grade']); ?>
-                                        </span>
-                                    <?php else: ?>
-                                        <small class="text-muted">Not graded</small>
-                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
@@ -364,14 +451,16 @@ require_once '../includes/header.php';
                                                         <i class="fas fa-check text-success me-1"></i>Approve
                                                     </button>
                                                 </li>
-                                                <li>
-                                                    <button class="dropdown-item" onclick="updateStatus(<?php echo $report['id']; ?>, 'revision_required')">
-                                                        <i class="fas fa-edit text-warning me-1"></i>Request Revision
-                                                    </button>
-                                                </li>
+                                            
                                                 <li>
                                                     <button class="dropdown-item" onclick="updateStatus(<?php echo $report['id']; ?>, 'rejected')">
                                                         <i class="fas fa-times text-danger me-1"></i>Reject
+                                                    </button>
+                                                </li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li>
+                                                    <button class="dropdown-item text-danger" onclick="deleteReport(<?php echo $report['id']; ?>)">
+                                                        <i class="fas fa-trash text-danger me-1"></i>Delete
                                                     </button>
                                                 </li>
                                             </ul>
@@ -431,17 +520,49 @@ require_once '../includes/header.php';
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Report Details - <?php echo htmlspecialchars($viewReport['title']); ?></h5>
+                <h5 class="modal-title">Bullying Report Details - <?php echo htmlspecialchars($viewReport['title']); ?></h5>
                 <a href="all_reports.php" class="btn-close"></a>
             </div>
             <div class="modal-body">
                 <div class="row">
                     <div class="col-lg-8">
                         <div class="academic-section">
+                            <!-- Student ID Photo Above Title (Clickable for Zoom) -->
+                            <?php
+                            $photoPath = $viewReport['id_photo_path'] ?? '';
+                            $absolutePhotoPath = '';
+                            if ($photoPath) {
+                                $absolutePhotoPath = __DIR__ . '/../' . $photoPath;
+                            }
+                            if ($photoPath) {
+                                echo '<div class="text-center mb-3">'
+                                    . '<a href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#idPhotoModal">'
+                                    . '<img src="../' . htmlspecialchars($photoPath) . '" alt="ID Photo" style="width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid #007bff;box-shadow:0 2px 16px rgba(0,0,0,0.12);margin-bottom:10px;cursor:pointer;" />'
+                                    . '</a>';
+                                if (!file_exists($absolutePhotoPath)) {
+                                    echo '<div class="text-danger small">ID photo file not found: ' . htmlspecialchars($photoPath) . '</div>';
+                                }
+                                echo '</div>';
+                                // Modal for zoomed photo
+                                echo '<div class="modal fade" id="idPhotoModal" tabindex="-1" aria-labelledby="idPhotoModalLabel" aria-hidden="true">'
+                                    . '<div class="modal-dialog modal-dialog-centered">'
+                                    . '<div class="modal-content">'
+                                    . '<div class="modal-header">'
+                                    . '<h5 class="modal-title" id="idPhotoModalLabel">Student ID Photo</h5>'
+                                    . '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>'
+                                    . '</div>'
+                                    . '<div class="modal-body text-center">'
+                                    . '<img src="../' . htmlspecialchars($photoPath) . '" alt="ID Photo" style="max-width:100%;max-height:400px;border-radius:12px;border:3px solid #007bff;box-shadow:0 2px 16px rgba(0,0,0,0.12);" />'
+                                    . '</div>'
+                                    . '</div>'
+                                    . '</div>'
+                                    . '</div>';
+                            }
+                            ?>
                             <h6>Report Information</h6>
                             <div class="row mb-3">
-                                <div class="col-sm-3 fw-bold">Title:</div>
-                                <div class="col-sm-9"><?php echo htmlspecialchars($viewReport['title']); ?></div>
+                                <div class="col-sm-3 fw-bold">Type of Bullying:</div>
+                                <div class="col-sm-9"><span class="badge bg-primary fs-6"><?php echo htmlspecialchars($viewReport['title']); ?></span></div>
                             </div>
                             <div class="row mb-3">
                                 <div class="col-sm-3 fw-bold">Student:</div>
@@ -451,9 +572,24 @@ require_once '../includes/header.php';
                                 </div>
                             </div>
                             <div class="row mb-3">
-                                <div class="col-sm-3 fw-bold">School:</div>
-                                <div class="col-sm-9"><?php echo htmlspecialchars($viewReport['school_name']); ?></div>
+                                <div class="col-sm-3 fw-bold">School (Submitted To):</div>
+                                <div class="col-sm-9"><?php echo htmlspecialchars($viewReport['report_school_name']); ?></div>
                             </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold">School (Registered):</div>
+                                <div class="col-sm-9">
+                                    <?php echo htmlspecialchars($viewReport['registered_school_name'] ?? 'N/A'); ?>
+                                    <?php if ($viewReport['school_id'] !== $viewReport['registered_school_id']): ?>
+                                        <span class="badge bg-warning text-dark ms-2">Student is registered at a different school</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <?php if ($viewReport['date_of_incident']): ?>
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold">Date of Incident:</div>
+                                <div class="col-sm-9"><?php echo formatDate($viewReport['date_of_incident']); ?></div>
+                            </div>
+                            <?php endif; ?>
                             <div class="row mb-3">
                                 <div class="col-sm-3 fw-bold">Description:</div>
                                 <div class="col-sm-9"><?php echo nl2br(htmlspecialchars($viewReport['description'])); ?></div>
@@ -470,6 +606,69 @@ require_once '../includes/header.php';
                                 <div class="col-sm-3 fw-bold">Submitted:</div>
                                 <div class="col-sm-9"><?php echo formatDate($viewReport['submission_date']); ?></div>
                             </div>
+                            <?php if (!empty($viewReport['evidence'])): ?>
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold">Evidence:</div>
+                                <div class="col-sm-9">
+                                    <?php foreach ($viewReport['evidence'] as $index => $evidence): ?>
+                                        <div class="mb-2">
+                                            <?php
+                                            echo htmlspecialchars($evidence['file_name']);
+                                            echo '<small class="text-muted ms-2">(' . formatFileSize($evidence['file_size']) . ')</small>';
+
+                                            $fileExt = strtolower(pathinfo($evidence['file_path'], PATHINFO_EXTENSION));
+                                            $imageTypes = ['jpg', 'jpeg', 'png', 'gif'];
+                                            $videoTypes = ['mp4', 'webm', 'ogg', 'mov', 'm4v', '3gp', 'avi', 'wmv', 'flv'];
+                                            $pdfTypes = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+                                            $webPath = $evidence['file_path'];
+                                            if (strpos($webPath, 'uploads/') !== 0) {
+                                                $webPath = 'uploads/' . basename($webPath);
+                                            }
+                                            ?>
+                                            <br>
+                                            <div class="btn-group mb-2">
+                                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="toggleEvidence(<?php echo $index; ?>)">
+                                                    <i class="fas fa-eye me-1"></i>View
+                                                </button>
+                                                <a href="../student/download_report.php?id=<?php echo $viewReport['id']; ?>&evidence_id=<?php echo $evidence['id']; ?>" 
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-download me-1"></i>Download
+                                                </a>
+                                            </div>
+                                            <div id="evidencePreview-<?php echo $index; ?>" style="display:none;" class="mt-2">
+                                                <?php if (in_array($fileExt, $imageTypes)): ?>
+                                                    <a href="javascript:void(0);" onclick="showGlobalImage('../<?php echo htmlspecialchars($webPath); ?>', 'Evidence Photo')">
+                                                        <img src="../<?php echo htmlspecialchars($webPath); ?>" alt="Evidence Photo" style="max-width:100%;max-height:400px;border-radius:12px;border:1px solid #007bff;box-shadow:0 2px 16px rgba(0,0,0,0.12);margin-bottom:10px;cursor:pointer;" />
+                                                    </a>
+                                                <?php elseif (in_array($fileExt, $videoTypes)): ?>
+                                                    <video controls style="max-width:100%;max-height:400px;border-radius:12px;margin-bottom:10px;">
+                                                        <source src="../<?php echo htmlspecialchars($webPath); ?>" type="<?php echo ($fileExt === 'mov') ? 'video/quicktime' : 'video/' . htmlspecialchars($fileExt); ?>">Your browser does not support the video tag.
+                                                    </video>
+                                                    <?php if ($fileExt === 'mov'): ?>
+                                                        <small class="text-muted d-block mt-1">Note: .mov files may not play in all browsers. Please <a href="../student/download_report.php?id=<?php echo $viewReport['id']; ?>&evidence_id=<?php echo $evidence['id']; ?>">download the file</a> to view it.</small>
+                                                    <?php endif; ?>
+                                                <?php elseif (in_array($fileExt, $pdfTypes)): ?>
+                                                    <iframe src="../<?php echo htmlspecialchars($webPath); ?>" style="width:100%;height:400px;border-radius:12px;border:1px solid #007bff;margin-bottom:10px;" frameborder="0"></iframe>
+                                                <?php else: ?>
+                                                    <div class="alert alert-info">File type not supported for preview.</div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                    <script>
+                                    function toggleEvidence(index) {
+                                        var elementId = 'evidencePreview-' + index;
+                                        var preview = document.getElementById(elementId);
+                                        if (preview.style.display === 'none') {
+                                            preview.style.display = 'block';
+                                        } else {
+                                            preview.style.display = 'none';
+                                        }
+                                    }
+                                    </script>
+                                </div>
+                            </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="col-lg-4">
@@ -485,11 +684,13 @@ require_once '../includes/header.php';
                                     <button class="btn btn-success btn-sm" onclick="updateStatus(<?php echo $viewReport['id']; ?>, 'approved')">
                                         <i class="fas fa-check me-1"></i>Approve
                                     </button>
-                                    <button class="btn btn-warning btn-sm" onclick="updateStatus(<?php echo $viewReport['id']; ?>, 'revision_required')">
-                                        <i class="fas fa-edit me-1"></i>Request Revision
-                                    </button>
+                                 
                                     <button class="btn btn-danger btn-sm" onclick="updateStatus(<?php echo $viewReport['id']; ?>, 'rejected')">
                                         <i class="fas fa-times me-1"></i>Reject
+                                    </button>
+                                    <hr>
+                                    <button class="btn btn-outline-danger btn-sm" onclick="deleteReport(<?php echo $viewReport['id']; ?>)">
+                                        <i class="fas fa-trash me-1"></i>Delete Report
                                     </button>
                                 </div>
                             </div>
@@ -537,6 +738,152 @@ function updateStatus(reportId, newStatus) {
         });
     }
 }
+
+function deleteReport(reportId) {
+    if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+        fetch('all_reports.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'soft_delete',
+                report_ids: [reportId]
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Report deleted successfully!', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showAlert(data.message || 'Failed to delete report', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('An error occurred while deleting report', 'danger');
+        });
+    }
+}
+
+// Handle checkbox selection
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+    const reportCheckboxes = document.querySelectorAll('.report-checkbox');
+
+    // Select all functionality
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            reportCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateDeleteButtonState();
+        });
+    }
+
+    // Select all button functionality
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function() {
+            const allChecked = Array.from(reportCheckboxes).every(cb => cb.checked);
+            reportCheckboxes.forEach(checkbox => {
+                checkbox.checked = !allChecked;
+            });
+            selectAllCheckbox.checked = !allChecked;
+            updateDeleteButtonState();
+        });
+    }
+
+    // Individual checkbox change
+    reportCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateDeleteButtonState();
+            
+            // Update select all checkbox state
+            const checkedCount = document.querySelectorAll('.report-checkbox:checked').length;
+            if (checkedCount === 0) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = false;
+            } else if (checkedCount === reportCheckboxes.length) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = true;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+            }
+        });
+    });
+
+    // Delete selected functionality
+    if (deleteSelectedBtn) {
+        deleteSelectedBtn.addEventListener('click', function() {
+            const selectedReports = Array.from(document.querySelectorAll('.report-checkbox:checked'))
+                .map(cb => cb.value);
+            
+            if (selectedReports.length === 0) {
+                showAlert('Please select reports to delete', 'warning');
+                return;
+            }
+
+            if (confirm(`Are you sure you want to delete ${selectedReports.length} selected report(s)? This action cannot be undone.`)) {
+                fetch('all_reports.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'soft_delete',
+                        report_ids: selectedReports
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert(data.message, 'success');
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        showAlert(data.message || 'Failed to delete reports', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert('An error occurred while deleting reports', 'danger');
+                });
+            }
+        });
+    }
+
+    function updateDeleteButtonState() {
+        const checkedCount = document.querySelectorAll('.report-checkbox:checked').length;
+        if (deleteSelectedBtn) {
+            deleteSelectedBtn.disabled = checkedCount === 0;
+            deleteSelectedBtn.innerHTML = checkedCount > 0 
+                ? `<i class="fas fa-trash-alt me-1"></i>Delete Selected (${checkedCount})`
+                : '<i class="fas fa-trash-alt me-1"></i>Delete Selected';
+        }
+    }
+});
 </script>
+
+<style>
+.status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+.status-submitted { background-color: #EBF8FF; color: #1e38afff; }
+.status-under_review { background-color: #FEF3C7; color: #B45309; }
+.status-approved { background-color: #D1FAE5; color: #047857; }
+.status-rejected { background-color: #FEE2E2; color: #B91C1C; }
+.status-revision_required { background-color: #EDE9FE; color: #6B21A8; }
+
+.form-check-input:indeterminate {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 10h8'/%3e%3c/svg%3e");
+}
+</style>
 
 <?php require_once '../includes/footer.php'; ?>

@@ -1,0 +1,16 @@
+# Logs
+*.log
+
+# VSCode
+.vscode/
+
+# Uploads
+/uploads/id_photos/
+/test_uploads/
+
+# Dependencies
+/PHPMAILER/
+/includes/phpmailer/
+
+# Database dumps
+*.sql

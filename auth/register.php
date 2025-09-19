@@ -103,9 +103,46 @@ if ($_POST) {
                 
                 if ($userId) {
                     logActivity($db, $userId, 'student', 'register', 'New student account created');
-                    
+
+                    // Send professional welcome email to student
+                    require_once __DIR__ . '/../config/mail.php';
+                    $studentSubject = "Welcome to " . APP_NAME . ", {$firstName}!";
+                    $studentBody = "<div style='font-family: Arial, sans-serif; color: #333;'>"
+                        . "<h2 style='color:#0d6efd;'>Welcome, " . htmlspecialchars($firstName) . "</h2>"
+                        . "<p>Your account has been created successfully for <strong>" . htmlspecialchars($username) . "</strong>. You can now sign in to your student dashboard to submit reports and view your submissions.</p>"
+                        . "<p><strong>Quick links:</strong></p>"
+                        . "<ul>"
+                        . "<li><a href='" . BASE_URL . "auth/login.php'>Sign in to your account</a></li>"
+                        . "<li><a href='" . BASE_URL . "'>Visit SafeSpeak homepage</a></li>"
+                        . "</ul>"
+                        . "<p>If you did not create this account, please contact your school administration or reply to this email.</p>"
+                        . "<p style='font-size:12px; color:#666;'>Regards,<br/>" . APP_NAME . " Team</p>"
+                        . "</div>";
+
+                    sendMail($email, $studentSubject, $studentBody);
+
+                    // Notify the school of the new registration (if school email available)
+                    $schoolInfo = $db->fetchOne('SELECT id, name, email, contact_person FROM schools WHERE id = ?', [$schoolId]);
+                    if ($schoolInfo && !empty($schoolInfo['email'])) {
+                        $schoolSubject = "New student registered: " . htmlspecialchars($firstName . ' ' . $lastName);
+                        $schoolBody = "<div style='font-family: Arial, sans-serif; color: #333;'>"
+                            . "<h3 style='color:#0d6efd;'>New Student Registration</h3>"
+                            . "<p>A new student has registered to your school (<strong>" . htmlspecialchars($schoolInfo['name']) . "</strong>).</p>"
+                            . "<table style='width:100%; font-size:14px; border-collapse:collapse;'>"
+                            . "<tr><td style='padding:6px; border:1px solid #eee;'><strong>Name</strong></td><td style='padding:6px; border:1px solid #eee;'>" . htmlspecialchars($firstName . ' ' . $lastName) . "</td></tr>"
+                            . "<tr><td style='padding:6px; border:1px solid #eee;'><strong>Username</strong></td><td style='padding:6px; border:1px solid #eee;'>" . htmlspecialchars($username) . "</td></tr>"
+                            . "<tr><td style='padding:6px; border:1px solid #eee;'><strong>Email</strong></td><td style='padding:6px; border:1px solid #eee;'>" . htmlspecialchars($email) . "</td></tr>"
+                            . "<tr><td style='padding:6px; border:1px solid #eee;'><strong>Student ID</strong></td><td style='padding:6px; border:1px solid #eee;'>" . htmlspecialchars($studentId) . "</td></tr>"
+                            . "</table>"
+                            . "<p>You can review this student in your admin dashboard. If you did not expect this registration, please investigate.</p>"
+                            . "<p style='font-size:12px; color:#666;'>Regards,<br/>" . APP_NAME . " Team</p>"
+                            . "</div>";
+
+                        sendMail($schoolInfo['email'], $schoolSubject, $schoolBody);
+                    }
+
                     $success = 'Account created successfully! You can now log in.';
-                    
+
                     // Auto-login the user
                     $_SESSION['user_id'] = $userId;
                     $_SESSION['username'] = $username;
@@ -113,8 +150,8 @@ if ($_POST) {
                     $_SESSION['last_name'] = $lastName;
                     $_SESSION['role'] = 'student';
                     $_SESSION['school_id'] = $schoolId;
-                    
-                    redirect('../student/dashboard.php', 'Welcome to the Capstone System, ' . $firstName . '!', 'success');
+
+                    redirect('../student/dashboard.php', 'Welcome to the SafeSpeak, ' . $firstName . '!', 'success');
                 } else {
                     $error = 'Failed to create account. Please try again.';
                 }
@@ -126,163 +163,141 @@ if ($_POST) {
 require_once '../includes/header.php';
 ?>
 
-<div class="auth-container">
-    <div class="auth-card" style="max-width: 550px;">
-        <div class="auth-header">
-            <div class="auth-logo">
-                <i class="fas fa-user-graduate"></i>
-            </div>
-            <h2>Student Registration</h2>
-            <p>Create your academic account</p>
-        </div>
-        
-        <?php if ($error): ?>
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-triangle me-2"></i><?php echo $error; ?>
-            </div>
-        <?php endif; ?>
-        
-        <?php if ($success): ?>
-            <div class="alert alert-success">
-                <i class="fas fa-check-circle me-2"></i><?php echo $success; ?>
-            </div>
-        <?php endif; ?>
-        
-        <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label for="first_name" class="form-label">First Name *</label>
-                        <input type="text" class="form-control" id="first_name" name="first_name" 
-                               value="<?php echo htmlspecialchars($firstName ?? ''); ?>" required>
-                        <div class="invalid-feedback">Please enter your first name.</div>
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-9">
+            <div class="card shadow-sm">
+                <div class="card-body p-4 p-md-5">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3 display-6 text-primary"><i class="fas fa-user-graduate"></i></div>
+                        <div>
+                            <h3 class="mb-0">Student Registration</h3>
+                            <small class="text-muted">Create your academic account</small>
+                        </div>
+                    </div>
+
+                    <?php if ($error): ?>
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i><?php echo $error; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($success): ?>
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i><?php echo $success; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="first_name" class="form-label small fw-semibold">First Name *</label>
+                                <input type="text" class="form-control" id="first_name" name="first_name" value="<?php echo htmlspecialchars($firstName ?? ''); ?>" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="last_name" class="form-label small fw-semibold">Last Name *</label>
+                                <input type="text" class="form-control" id="last_name" name="last_name" value="<?php echo htmlspecialchars($lastName ?? ''); ?>" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="student_id" class="form-label small fw-semibold">Student ID *</label>
+                                <input type="text" class="form-control" id="student_id" name="student_id" value="<?php echo htmlspecialchars($studentId ?? ''); ?>" placeholder="e.g., 2024-001234" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="school_id" class="form-label small fw-semibold">School *</label>
+                                <select class="form-select" id="school_id" name="school_id" required>
+                                    <option value="">Select your school</option>
+                                    <?php foreach ($schools as $school): ?>
+                                        <option value="<?php echo $school['id']; ?>" <?php echo (isset($schoolId) && $schoolId == $school['id']) ? 'selected' : ''; ?>><?php echo htmlspecialchars($school['name']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <div class="col-12"><hr></div>
+
+                            <div class="col-md-6">
+                                <label for="username" class="form-label small fw-semibold">Username *</label>
+                                <input type="text" class="form-control" id="username" name="username" value="<?php echo htmlspecialchars($username ?? ''); ?>" pattern="[a-zA-Z0-9_]+" title="Username can only contain letters, numbers, and underscores" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="email" class="form-label small fw-semibold">Email Address *</label>
+                                <input type="email" class="form-control" id="email" name="email" value="<?php echo htmlspecialchars($email ?? ''); ?>" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="password" class="form-label small fw-semibold">Password *</label>
+                                <input type="password" class="form-control" id="password" name="password" minlength="6" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="confirm_password" class="form-label small fw-semibold">Confirm Password *</label>
+                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" minlength="6" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="id_photo" class="form-label small fw-semibold">Student ID Photo *</label>
+                                <input type="file" class="form-control" id="id_photo" name="id_photo" accept="image/jpeg,image/jpg,image/png" required>
+                                <div class="form-text">Upload a clear photo of your student ID (JPG, JPEG, or PNG)</div>
+                            </div>
+                            <div class="col-md-6 d-flex align-items-center">
+                                <div class="w-100 text-center">
+                                    <img id="idPreview" src="../uploads/6890110659703_pexels-panditwiguna-3401403.jpg" alt="ID preview" class="img-fluid rounded border" style="max-height:140px; object-fit:cover;">
+                                    <div class="small text-muted mt-2">ID preview</div>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="terms" required>
+                                    <label class="form-check-label small" for="terms">I agree to the <a href="#" class="text-primary">Terms</a> and <a href="#" class="text-primary">Privacy Policy</a> *</label>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-user-plus me-2"></i>Create Account</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="text-center mt-4">
+                        <p class="mb-2 small">Already have an account?</p>
+                        <a href="login.php" class="btn btn-outline-primary btn-sm"><i class="fas fa-sign-in-alt me-1"></i>Sign In</a>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <a href="../index.php" class="text-muted small"><i class="fas fa-arrow-left me-1"></i>Back to Home</a>
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label for="last_name" class="form-label">Last Name *</label>
-                        <input type="text" class="form-control" id="last_name" name="last_name" 
-                               value="<?php echo htmlspecialchars($lastName ?? ''); ?>" required>
-                        <div class="invalid-feedback">Please enter your last name.</div>
-                    </div>
-                </div>
             </div>
-            
-            <div class="form-group">
-                <label for="student_id" class="form-label">Student ID *</label>
-                <input type="text" class="form-control" id="student_id" name="student_id" 
-                       value="<?php echo htmlspecialchars($studentId ?? ''); ?>" 
-                       placeholder="e.g., 2024-001234" required>
-                <div class="invalid-feedback">Please enter your student ID.</div>
-            </div>
-            
-            <div class="form-group">
-                <label for="school_id" class="form-label">School *</label>
-                <select class="form-select" id="school_id" name="school_id" required>
-                    <option value="">Select your school</option>
-                    <?php foreach ($schools as $school): ?>
-                        <option value="<?php echo $school['id']; ?>" 
-                                <?php echo (isset($schoolId) && $schoolId == $school['id']) ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($school['name']); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <div class="invalid-feedback">Please select your school.</div>
-            </div>
-            
-            <hr class="my-3">
-            
-            <div class="form-group">
-                <label for="username" class="form-label">Username *</label>
-                <input type="text" class="form-control" id="username" name="username" 
-                       value="<?php echo htmlspecialchars($username ?? ''); ?>" 
-                       pattern="[a-zA-Z0-9_]+" title="Username can only contain letters, numbers, and underscores" required>
-                <div class="invalid-feedback">Please enter a valid username (letters, numbers, and underscores only).</div>
-            </div>
-            
-            <div class="form-group">
-                <label for="email" class="form-label">Email Address *</label>
-                <input type="email" class="form-control" id="email" name="email" 
-                       value="<?php echo htmlspecialchars($email ?? ''); ?>" required>
-                <div class="invalid-feedback">Please enter a valid email address.</div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label for="password" class="form-label">Password *</label>
-                        <input type="password" class="form-control" id="password" name="password" 
-                               minlength="6" required>
-                        <div class="invalid-feedback">Password must be at least 6 characters long.</div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label for="confirm_password" class="form-label">Confirm Password *</label>
-                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" 
-                               minlength="6" required>
-                        <div class="invalid-feedback">Please confirm your password.</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label for="id_photo" class="form-label">Student ID Photo *</label>
-                <input type="file" class="form-control" id="id_photo" name="id_photo" 
-                       accept="image/jpeg,image/jpg,image/png" required>
-                <div class="form-text">Upload a clear photo of your student ID (JPG, JPEG, or PNG format, max 5MB)</div>
-                <div class="invalid-feedback">Please upload your student ID photo.</div>
-            </div>
-            
-            <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" id="terms" required>
-                <label class="form-check-label" for="terms">
-                    I agree to the <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a> *
-                </label>
-                <div class="invalid-feedback">You must agree to the terms and conditions.</div>
-            </div>
-            
-            <div class="d-grid">
-                <button type="submit" class="btn btn-primary btn-lg">
-                    <i class="fas fa-user-plus me-2"></i>Create Account
-                </button>
-            </div>
-        </form>
-        
-        <div class="text-center mt-4">
-            <p class="mb-2">Already have an account?</p>
-            <a href="login.php" class="btn btn-outline-primary">
-                <i class="fas fa-sign-in-alt me-1"></i>Sign In
-            </a>
-        </div>
-        
-        <div class="text-center mt-3">
-            <a href="../index.php" class="text-muted">
-                <i class="fas fa-arrow-left me-1"></i>Back to Home
-            </a>
         </div>
     </div>
 </div>
 
 <script>
-// Password confirmation validation
-document.getElementById('confirm_password').addEventListener('input', function() {
-    const password = document.getElementById('password').value;
-    const confirmPassword = this.value;
-    
-    if (password !== confirmPassword) {
+// Password confirmation validation and ID preview
+const confirmInput = document.getElementById('confirm_password');
+const passwordInput = document.getElementById('password');
+confirmInput && confirmInput.addEventListener('input', function() {
+    if (passwordInput.value !== this.value) {
         this.setCustomValidity('Passwords do not match');
     } else {
         this.setCustomValidity('');
     }
 });
 
-document.getElementById('password').addEventListener('input', function() {
-    const confirmPassword = document.getElementById('confirm_password');
-    if (confirmPassword.value) {
-        confirmPassword.dispatchEvent(new Event('input'));
-    }
-});
+const idPhoto = document.getElementById('id_photo');
+const preview = document.getElementById('idPreview');
+if (idPhoto) {
+    idPhoto.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            preview.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
 </script>
 
-<?php require_once '../includes/footer.php'; ?>
