@@ -60,16 +60,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (empty($errors)) {
+        // Track changes for before/after comparison
+        $changes = [];
+        if ($user['first_name'] !== $first) {
+            $changes['first_name'] = ['old' => $user['first_name'], 'new' => $first];
+        }
+        if ($user['last_name'] !== $last) {
+            $changes['last_name'] = ['old' => $user['last_name'], 'new' => $last];
+        }
+        if ($user['email'] !== $email) {
+            $changes['email'] = ['old' => $user['email'], 'new' => $email];
+        }
+
         // update first/last/email
         $db->query("UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?", [$first, $last, $email, $userId]);
         $success = true;
-    // refresh user record
-    $user = $db->fetchOne("SELECT id, first_name, last_name, email, id_photo_path FROM users WHERE id = ?", [$userId]);
+        // refresh user record
+        $user = $db->fetchOne("SELECT id, first_name, last_name, email, id_photo_path FROM users WHERE id = ?", [$userId]);
         // update session values
         $_SESSION['first_name'] = $user['first_name'];
         $_SESSION['last_name'] = $user['last_name'];
-    $_SESSION['id_photo'] = $user['id_photo_path'] ? basename($user['id_photo_path']) : '';
+        $_SESSION['id_photo'] = $user['id_photo_path'] ? basename($user['id_photo_path']) : '';
         $_SESSION['email'] = $user['email'];
+
+        // Notify admins and school
+        require_once '../config/mail.php';
+        require_once '../templates/email/load_template.php';
+
+        $studentUser = $db->fetchOne("SELECT u.*, s.name as school_name, s.email as school_email FROM users u JOIN schools s ON u.school_id = s.id WHERE u.id = ?", [$userId]);
+        $admins = $db->fetchAll("SELECT * FROM users WHERE role = 'admin'");
+        
+        $emailData = [
+            'user' => $studentUser,
+            'updatedBy' => $studentUser,
+            'userRole' => 'Student',
+            'changes' => $changes,
+            'timestamp' => date('Y-m-d H:i:s')
+        ];
+
+        $emailBody = load_email_template('profile_updated.php', $emailData);
+        $subject = 'Student Profile Updated: ' . $studentUser['first_name'] . ' ' . $studentUser['last_name'];
+
+        foreach ($admins as $admin) {
+            sendMail($admin['email'], $subject, $emailBody);
+        }
+
+        if (!empty($studentUser['school_email'])) {
+            sendMail($studentUser['school_email'], $subject, $emailBody);
+        }
     }
 }
 

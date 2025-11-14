@@ -16,9 +16,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reportId = (int)$input['report_id'];
         $comments = $input['comments'] ?? '';
 
-        // Verify report belongs to this school
+        // Verify report belongs to this school and get its data for analysis
         $report = $db->fetchOne(
-            "SELECT id FROM reports WHERE id = ? AND school_id = ?",
+            "SELECT * FROM reports WHERE id = ? AND school_id = ?",
             [$reportId, $schoolId]
         );
     
@@ -26,9 +26,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => false, 'message' => 'Report not found or access denied']);
             exit;
         }
+
+        // Get evidence count for analysis
+        $evidenceCount = $db->fetchOne("SELECT COUNT(*) as count FROM report_evidence WHERE report_id = ?", [$reportId])['count'] ?? 0;
+
+        // Analyze the report to get the new severity
+        $analysis = analyze_report($report, $evidenceCount);
+        $newSeverity = $analysis['severity'];
     
-    // Valid status transitions for school users (admin-only statuses like 'verified' and 'approved' are not included)
-    $validStatuses = ['submitted', 'under_investigation', 'referred_to_mswd', 'verified', 'rejected'];
+        // Valid status transitions for school users (admin-only statuses like 'verified' and 'approved' are not included)
+        $validStatuses = ['submitted', 'under_investigation', 'referred_to_mswd', 'verified', 'rejected'];
         if (!in_array($newStatus, $validStatuses)) {
             echo json_encode(['success' => false, 'message' => 'Invalid status']);
             exit;
@@ -37,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Prepare update data
         $updateData = [
             'status' => $newStatus,
+            'severity' => $newSeverity,
             'reviewed_by_school' => 1,
             'reviewed_at' => date('Y-m-d H:i:s')
         ];
@@ -400,17 +408,17 @@ require_once '../includes/header.php';
                 <?php endif; ?>
                 
                 <?php
-                // Recommended actions and severity (use stored or analyze on the fly)
-                $recommendedActions = $report['recommended_actions'] ?? '';
-                $severityLabel = $report['severity'] ?? '';
-                if (empty($recommendedActions) || empty($severityLabel)) {
-                    try {
-                        $analysis = analyze_report($report, !empty($evidence) ? count($evidence) : 0);
-                        if (empty($recommendedActions) && !empty($analysis['suggested_actions'])) $recommendedActions = $analysis['suggested_actions'];
-                        if (empty($severityLabel) && !empty($analysis['severity'])) $severityLabel = $analysis['severity'];
-                    } catch (Throwable $t) {
-                        // ignore
-                    }
+                // Always analyze the report on the fly to ensure severity is up-to-date.
+                try {
+                    $analysis = analyze_report($report, !empty($evidence) ? count($evidence) : 0);
+                    // Use newly analyzed data, fall back to stored data if analysis fails
+                    $recommendedActions = $analysis['suggested_actions'] ?? $report['recommended_actions'] ?? '';
+                    $severityLabel = $analysis['severity'] ?? $report['severity'] ?? '';
+                } catch (Throwable $t) {
+                    // If analysis fails, fall back to stored data
+                    $recommendedActions = $report['recommended_actions'] ?? '';
+                    $severityLabel = $report['severity'] ?? '';
+                    error_log("Report analysis failed for report ID {$reportId}: " . $t->getMessage());
                 }
                 ?>
 

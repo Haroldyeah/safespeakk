@@ -19,7 +19,7 @@ $sortBy = $_GET['sort'] ?? 'submission_date';
 $sortOrder = $_GET['order'] ?? 'DESC';
 
 // Valid sort columns
-$validSortColumns = ['submission_date', 'title', 'status', 'first_name', 'student_id', 'date_of_incident'];
+$validSortColumns = ['submission_date', 'title', 'status', 'first_name', 'student_id', 'date_of_incident', 'severity'];
 if (!in_array($sortBy, $validSortColumns)) {
     $sortBy = 'submission_date';
 }
@@ -33,9 +33,9 @@ $conditions = ["r.school_id = ?", "r.deleted_at IS NULL"];
 $params = [$schoolId];
 
 if ($search) {
-    $conditions[] = "(r.title LIKE ? OR r.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.student_id LIKE ?)";
+    $conditions[] = "(r.title LIKE ? OR r.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.student_id LIKE ? OR r.bully_name LIKE ?)";
     $searchParam = "%$search%";
-    $params = array_merge($params, [$searchParam, $searchParam, $searchParam, $searchParam, $searchParam]);
+    $params = array_merge($params, [$searchParam, $searchParam, $searchParam, $searchParam, $searchParam, $searchParam]);
 }
 
 if ($statusFilter) {
@@ -283,6 +283,14 @@ require_once '../includes/header.php';
                                 </a>
                             </th>
                             <th>
+                                <a href="?sort=severity&order=<?php echo $sortBy === 'severity' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>" class="text-decoration-none text-white">
+                                    <i class="fas fa-exclamation-circle me-1"></i>Severity 
+                                    <?php if ($sortBy === 'severity'): ?>
+                                        <i class="fas fa-sort-<?php echo $sortOrder === 'ASC' ? 'up' : 'down'; ?>"></i>
+                                    <?php endif; ?>
+                                </a>
+                            </th>
+                            <th>
                                 <a href="?sort=date_of_incident&order=<?php echo $sortBy === 'date_of_incident' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>" class="text-decoration-none text-white">
                                     Date of Incident
                                     <?php if ($sortBy === 'date_of_incident'): ?>
@@ -340,6 +348,31 @@ require_once '../includes/header.php';
                                 <td>
                                     <span class="status-badge status-<?php echo $report['status']; ?>">
                                         <?php echo ucfirst(str_replace('_', ' ', $report['status'])); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <?php 
+                                    $severity = strtolower($report['severity'] ?? 'low');
+                                    ?>
+                                    <span class="severity-badge severity-<?php echo $severity; ?>" style="font-size: 0.9em; padding: 0.5em 0.75em;">
+                                        <?php 
+                                        // Add icon based on severity
+                                        switch($severity) {
+                                            case 'critical':
+                                                echo '<i class="fas fa-skull-crossbones me-1"></i>';
+                                                break;
+                                            case 'high':
+                                                echo '<i class="fas fa-exclamation-triangle me-1"></i>';
+                                                break;
+                                            case 'medium':
+                                                echo '<i class="fas fa-exclamation me-1"></i>';
+                                                break;
+                                            case 'low':
+                                            default:
+                                                echo '<i class="fas fa-info-circle me-1"></i>';
+                                        }
+                                        echo ucfirst($severity);
+                                        ?>
                                     </span>
                                 </td>
                                 <td>

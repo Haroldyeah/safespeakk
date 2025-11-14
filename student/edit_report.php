@@ -88,8 +88,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_FILES) && $_SERVER['CONTENT
             
             // Handle file uploads
             if (isset($_FILES['report_files']) && !empty($_FILES['report_files']['name'][0])) {
-                if (count($_FILES['report_files']['name']) > 3) {
-                    $error = 'You can upload a maximum of 3 files.';
+                if (count($_FILES['report_files']['name']) > MAX_EVIDENCE_FILES) {
+                    $error = 'You can upload a maximum of ' . MAX_EVIDENCE_FILES . ' files.';
                 } elseif (count($_FILES['report_files']['name']) < count($_FILES['report_files']['tmp_name'])) { // Check if some files were not fully uploaded
                     $error = 'Some files were not uploaded. This might be due to server limits (e.g., max_file_uploads in php.ini). Please try uploading fewer files or contact support.';
                 } else {
@@ -245,7 +245,7 @@ require_once '../includes/header.php';
                             <div id="filePrompt" class="text-muted">
                                 <i class="fas fa-cloud-upload-alt fa-2x"></i>
                                 <p class="mb-0 mt-2">Tap to select files or drag & drop here</p>
-                                <small class="text-muted">PDF, DOC, JPG, PNG, MP4 and other common formats. Max 50MB per file, up to 3 files.</small>
+                                <small class="text-muted">PDF, DOC, JPG, PNG, MP4 and other common formats. Max 50MB per file, up to <?php echo MAX_EVIDENCE_FILES; ?> files.</small>
                             </div>
                             <div id="filePreview" style="display:none; margin-top:12px; text-align:center;"></div>
                         </label>

@@ -78,6 +78,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $sql = rtrim($sql, ", ") . " WHERE id = ?";
         $params[] = $schoolId;
 
+        // Track old values before update
+        $oldSchool = $db->fetchOne("SELECT * FROM schools WHERE id = ?", [$schoolId]);
+
         // Execute update
         $result = $db->query($sql, $params);
 
@@ -89,6 +92,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Refresh school data
             $school = $db->fetchOne("SELECT * FROM schools WHERE id = ?", [$schoolId]);
+
+            // Track changes for before/after comparison
+            $changes = [];
+            if ($oldSchool['email'] !== $email) {
+                $changes['email'] = ['old' => $oldSchool['email'], 'new' => $email];
+            }
+            if ($oldSchool['contact_person'] !== $contact_person) {
+                $changes['contact_person'] = ['old' => $oldSchool['contact_person'], 'new' => $contact_person];
+            }
+            if ($oldSchool['phone'] !== $phone) {
+                $changes['phone'] = ['old' => $oldSchool['phone'], 'new' => $phone];
+            }
+            if ($oldSchool['address'] !== $address) {
+                $changes['address'] = ['old' => $oldSchool['address'], 'new' => $address];
+            }
+
+            // Notify admins
+            require_once '../config/mail.php';
+            require_once '../templates/email/load_template.php';
+
+            $admins = $db->fetchAll("SELECT * FROM users WHERE role = 'admin'");
+            $updatedBy = $db->fetchOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
+            
+            $emailData = [
+                'user' => $school,
+                'updatedBy' => $updatedBy,
+                'userRole' => 'School',
+                'changes' => $changes,
+                'timestamp' => date('Y-m-d H:i:s')
+            ];
+
+            $emailBody = load_email_template('profile_updated.php', $emailData);
+            $subject = 'School Profile Updated: ' . $school['name'];
+
+            foreach ($admins as $admin) {
+                sendMail($admin['email'], $subject, $emailBody);
+            }
         } else {
             $errors[] = 'Failed to update profile.';
         }

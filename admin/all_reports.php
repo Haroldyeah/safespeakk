@@ -35,7 +35,8 @@ $conditions = ["r.deleted_at IS NULL"];
 $params = [];
 
 if ($search) {
-    $conditions[] = "(r.title LIKE ? OR r.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR s_report.name LIKE ?)";
+    $conditions[] = "(r.title LIKE ? OR r.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR s_report.name LIKE ? OR  r.bully_name LIKE ?)";
+    $params[] = "%$search%";
     $params[] = "%$search%";
     $params[] = "%$search%";
     $params[] = "%$search%";
@@ -552,7 +553,28 @@ require_once '../includes/header.php';
                                     $severityClass = ($severity === 'N/A') ? 'n-a' : strtolower($severity);
                                     ?>
                                     <span class="severity-badge severity-<?php echo $severityClass; ?>">
-                                        <?php echo htmlspecialchars($severity); ?>
+                                        <?php 
+                                        // Add icon based on severity
+                                        if ($severity === 'N/A') {
+                                            echo '<i class="fas fa-question-circle me-1"></i>';
+                                        } else {
+                                            switch(strtolower($severity)) {
+                                                case 'critical':
+                                                    echo '<i class="fas fa-skull-crossbones me-1"></i>';
+                                                    break;
+                                                case 'high':
+                                                    echo '<i class="fas fa-exclamation-triangle me-1"></i>';
+                                                    break;
+                                                case 'medium':
+                                                    echo '<i class="fas fa-exclamation me-1"></i>';
+                                                    break;
+                                                case 'low':
+                                                default:
+                                                    echo '<i class="fas fa-info-circle me-1"></i>';
+                                            }
+                                        }
+                                        echo htmlspecialchars($severity);
+                                        ?>
                                     </span>
                                 </td>
                                 <td>

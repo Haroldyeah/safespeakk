@@ -29,6 +29,26 @@ if (empty($token)) {
         
         logActivity($db, $user['id'], $user['role'], 'email_verified', 'Email address verified successfully.');
 
+        // Send professional registration notification email to school
+        require_once '../config/mail.php';
+        require_once '../templates/email/load_template.php';
+
+        $school = $db->fetchOne('SELECT * FROM schools WHERE id = ?', [$user['school_id']]);
+        
+        if ($school && !empty($school['email'])) {
+            $emailData = [
+                'student' => $user,
+                'school' => $school,
+                'appName' => APP_NAME,
+                'registrationDate' => $user['created_at'] ?? date('Y-m-d H:i:s')
+            ];
+
+            $emailBody = load_email_template('student_registered.php', $emailData);
+            $subject = 'New Student Registration: ' . $user['first_name'] . ' ' . $user['last_name'];
+
+            sendMail($school['email'], $subject, $emailBody);
+        }
+
         redirect('login.php', 'Email verified successfully! You can now log in.', 'success');
     }
 }

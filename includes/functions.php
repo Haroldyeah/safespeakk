@@ -94,6 +94,10 @@ function analyze_report(array $report, $evidenceInfo = 0) {
     // $evidenceInfo can be:
     // - int: a simple count of evidence files
     // - array: ['count' => int, 'samples' => [ ['file_name'=>..., 'file_path'=>..., 'file_size'=>...], ... ]]
+    
+    // Load dictionary
+    $dictionary = require __DIR__ . '/severity_dictionary.php';
+    
     $title = strtolower($report['title'] ?? '');
     $description = strtolower($report['description'] ?? '');
     $studentName = trim(($report['first_name'] ?? '') . ' ' . ($report['last_name'] ?? '')) ?: null;
@@ -101,27 +105,81 @@ function analyze_report(array $report, $evidenceInfo = 0) {
 
     $score = 0;
 
-    // Title-based weighting
-    if (strpos($title, 'physical') !== false) $score += 3;
-    if (strpos($title, 'sexual') !== false) $score += 4;
-    if (strpos($title, 'cyber') !== false) $score += 2;
-    if (strpos($title, 'prejudicial') !== false) $score += 2;
-    if (strpos($title, 'verbal') !== false) $score += 1;
+    // Title-based weighting (English, Tagalog, Bisaya)
+    if (strpos($title, 'physical') !== false || strpos($title, 'pisikal') !== false || strpos($title, 'pisiko') !== false) $score += 4;
+    if (strpos($title, 'sexual') !== false || strpos($title, 'seksuwal') !== false || strpos($title, 'sekswal') !== false) $score += 5;
+    if (strpos($title, 'cyber') !== false || strpos($title, 'cyber') !== false) $score += 3;
+    if (strpos($title, 'prejudicial') !== false || strpos($title, 'diskrimina') !== false || strpos($title, 'diskriminasyon') !== false) $score += 3;
+    if (strpos($title, 'verbal') !== false || strpos($title, 'berbal') !== false || strpos($title, 'salita') !== false) $score += 2;
 
-    // Keyword lists
-    $criticalKeywords = ['weapon','gun','knife','stab','rape','sexual assault','serious injury','blood','suicide','self-harm'];
-    foreach ($criticalKeywords as $kw) {
-        if (strpos($description, $kw) !== false) $score += 5;
+    /**
+     * Smart word detection function that finds keywords even in different sentence structures.
+     * Uses word boundaries and context-aware matching.
+     */
+    $detectKeywords = function($text, $keywords) {
+        $matchCount = 0;
+        foreach ($keywords as $keyword) {
+            // Skip empty keywords
+            if (empty(trim($keyword))) continue;
+            
+            // Split multi-word phrases for better detection
+            $words = preg_split('/\s+/', trim($keyword));
+            
+            // For single words, use word boundary matching
+            if (count($words) === 1) {
+                $pattern = '/\b' . preg_quote($keyword, '/') . '\b/i';
+                if (preg_match_all($pattern, $text, $matches)) {
+                    $matchCount += count($matches[0]);
+                }
+            } else {
+                // For multi-word phrases, check if all words appear in sequence
+                $escapedPhrase = preg_quote($keyword, '/');
+                $pattern = '/' . $escapedPhrase . '/i';
+                if (preg_match_all($pattern, $text, $matches)) {
+                    $matchCount += count($matches[0]);
+                }
+                
+                // Also check if words appear separately (more lenient)
+                $allWordsFound = true;
+                foreach ($words as $word) {
+                    if (strlen($word) > 2 && !preg_match('/\b' . preg_quote($word, '/') . '\b/i', $text)) {
+                        $allWordsFound = false;
+                        break;
+                    }
+                }
+                if ($allWordsFound && count($words) > 1) {
+                    $matchCount += 0.5; // Partial match bonus
+                }
+            }
+        }
+        return $matchCount;
+    };
+
+    // Score critical keywords (10 points each match)
+    $criticalMatches = 0;
+    if (isset($dictionary['critical']) && is_array($dictionary['critical'])) {
+        $criticalMatches = $detectKeywords($description, $dictionary['critical']);
+        $score += ($criticalMatches * 10);
     }
 
-    $highKeywords = ['threat','assault','attack','hurt','beat','beaten','punch','kick','choke','stalk','harass','threaten'];
-    foreach ($highKeywords as $kw) {
-        if (strpos($description, $kw) !== false) $score += 3;
+    // Score high keywords (5 points each match)
+    $highMatches = 0;
+    if (isset($dictionary['high']) && is_array($dictionary['high'])) {
+        $highMatches = $detectKeywords($description, $dictionary['high']);
+        $score += ($highMatches * 5);
+    }
+
+    // Score medium keywords (2 points each match)
+    $mediumMatches = 0;
+    if (isset($dictionary['medium']) && is_array($dictionary['medium'])) {
+        $mediumMatches = $detectKeywords($description, $dictionary['medium']);
+        $score += ($mediumMatches * 2);
     }
 
     // Description detail
     $wordCount = str_word_count($description);
-    if ($wordCount > 100) $score += 2;
+    if ($wordCount > 200) $score += 3;
+    elseif ($wordCount > 100) $score += 2;
     elseif ($wordCount > 50) $score += 1;
 
     // Evidence analysis: accept either int or a richer array
@@ -147,13 +205,13 @@ function analyze_report(array $report, $evidenceInfo = 0) {
 
             // Increase score based on type
             if (in_array($ext, ['mp4','mov','webm','mkv','avi','wmv','3gp'])) {
-                $score += 3; // video is strong evidence
+                $score += 4; // video is strong evidence
                 $evidenceAnalysis['videos']++;
             } elseif (in_array($ext, ['jpg','jpeg','png','gif','heic','heif'])) {
-                $score += 2; // image evidence
+                $score += 3; // image evidence
                 $evidenceAnalysis['images']++;
             } elseif (in_array($ext, ['pdf','doc','docx','txt'])) {
-                $score += 1; // document evidence
+                $score += 2; // document evidence
                 $evidenceAnalysis['documents']++;
             }
 
@@ -173,12 +231,12 @@ function analyze_report(array $report, $evidenceInfo = 0) {
                 $score = max(0, $score - 1);
             }
         }
-        // Cap added evidence score influence
-        $score += min(3, $evidenceCount);
+        // Enhanced evidence scoring - no cap, more generous
+        $score += ($evidenceCount * 2); // 2 points per file (was capped at 3)
     } else {
         // simple count
         $evidenceCount = (int)$evidenceInfo;
-        if ($evidenceCount > 0) $score += min(3, $evidenceCount);
+        if ($evidenceCount > 0) $score += ($evidenceCount * 2); // 2 points per file
     }
 
     // Recent incident increases urgency
@@ -187,7 +245,8 @@ function analyze_report(array $report, $evidenceInfo = 0) {
             $incidentTs = strtotime($report['date_of_incident']);
             if ($incidentTs !== false) {
                 $daysAgo = (time() - $incidentTs) / 86400;
-                if ($daysAgo <= 7) $score += 2;
+                if ($daysAgo <= 1) $score += 3;
+                elseif ($daysAgo <= 7) $score += 2;
                 elseif ($daysAgo <= 30) $score += 1;
             }
         } catch (Exception $e) {
@@ -195,12 +254,13 @@ function analyze_report(array $report, $evidenceInfo = 0) {
         }
     }
 
-    // Map score to severity (tuned)
-    if ($score >= 11) {
+    // Map score to severity (adjusted thresholds)
+    // With 3 critical words (30 pts) + 10 evidence files (20 pts) = 50 pts should be CRITICAL
+    if ($score >= 10) {
         $severity = 'critical';
-    } elseif ($score >= 8) {
+    } elseif ($score >= 7) {
         $severity = 'high';
-    } elseif ($score >= 4) {
+    } elseif ($score >= 3) {
         $severity = 'medium';
     } else {
         $severity = 'low';
@@ -251,6 +311,10 @@ function analyze_report(array $report, $evidenceInfo = 0) {
         $actionsText .= "{$i}. {$act}\n";
         $i++;
     }
+
+    // FOR DEBUGGING: Prepend score to actions
+    $debug_info = "DEBUG: [Score: {$score}] [CritMatches: {$criticalMatches}] [HighMatches: {$highMatches}] [MediumMatches: {$mediumMatches}] [Evidence: {$evidenceCount}]";
+    $actionsText = $debug_info . "\n\n" . $actionsText;
 
     $result = [
         'severity' => $severity,

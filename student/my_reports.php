@@ -220,18 +220,8 @@ function getWebPath($filePath) {
                                     $severityLabel = $report['severity'] ?? '';
                                     if (empty($severityLabel)) {
                                         try {
-                                            $evidenceInfo = [
-                                                'count' => (int)($report['evidence_count'] ?? 0),
-                                                'samples' => []
-                                            ];
-                                            if (!empty($report['evidence_sample_name']) || !empty($report['evidence_sample_path'])) {
-                                                $evidenceInfo['samples'][] = [
-                                                    'file_name' => $report['evidence_sample_name'] ?? '',
-                                                    'file_path' => $report['evidence_sample_path'] ?? '',
-                                                    'file_size' => $report['evidence_sample_size'] ?? 0
-                                                ];
-                                            }
-                                            $analysis = analyze_report($report, $evidenceInfo);
+                                            $evidenceCount = (int)($report['evidence_count'] ?? 0);
+                                            $analysis = analyze_report($report, $evidenceCount);
                                             $severityLabel = $analysis['severity'] ?? '';
                                         } catch (Throwable $t) {
                                             $severityLabel = '';

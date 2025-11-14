@@ -112,6 +112,7 @@ if ($_POST) {
 
                     // Send verification email
                     require_once __DIR__ . '/../config/mail.php';
+                    require_once __DIR__ . '/../templates/email/load_template.php';
                     $verificationLink = BASE_URL . 'auth/verify_email.php?token=' . $verificationToken;
                     
                     $subject = 'Verify Your Email for ' . APP_NAME;
@@ -122,14 +123,6 @@ if ($_POST) {
                           . "<p>If you did not create this account, please ignore this email.</p>";
 
                     sendMail($email, $subject, $body);
-
-                    // Notify the school of the new registration
-                    $schoolInfo = $db->fetchOne('SELECT id, name, email FROM schools WHERE id = ?', [$schoolId]);
-                    if ($schoolInfo && !empty($schoolInfo['email'])) {
-                        $schoolSubject = "New Student Registration Pending Verification: " . htmlspecialchars($firstName . ' ' . $lastName);
-                        $schoolBody = "<p>A new student, " . htmlspecialchars($firstName . ' ' . $lastName) . ", has registered under your school, " . htmlspecialchars($schoolInfo['name']) . ". Their account is pending email verification.</p>";
-                        sendMail($schoolInfo['email'], $schoolSubject, $schoolBody);
-                    }
 
                     redirect('login.php', 'Account created successfully! Please check your email to complete your registration.', 'success');
                 } else {

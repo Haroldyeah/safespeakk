@@ -24,8 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_FILES) && $_SERVER['CONTENT
         $error = 'Please fill in all required fields.';
     } elseif (!isset($_FILES['report_files']) || empty($_FILES['report_files']['name'][0])) {
         $error = 'Please select at least one file to upload.';
-    } elseif (count($_FILES['report_files']['name']) > 3) {
-        $error = 'You can upload a maximum of 3 files.';
+    } elseif (count($_FILES['report_files']['name']) > MAX_EVIDENCE_FILES) {
+        $error = 'You can upload a maximum of ' . MAX_EVIDENCE_FILES . ' files.';
     } else {
         // Verify selected school exists
         $school = $db->fetchOne("SELECT id FROM schools WHERE id = ? AND status = 'active'", [$selectedSchoolId]);
@@ -33,25 +33,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_FILES) && $_SERVER['CONTENT
         if (!$school) {
             $error = 'Selected school is not valid.';
         } else {
-            // Save report to database first
-            $reportData = [
-                'title' => $title,
-                'description' => $description,
-                'bully_name' => sanitizeInput($_POST['bully_name'] ?? ''),
-                'date_of_incident' => $dateOfIncident,
-                'student_id' => $studentId,
-                'school_id' => $selectedSchoolId,
-                'status' => 'submitted',
-                'submission_date' => date('Y-m-d H:i:s')
-            ];
-            
-            $reportId = $db->insert('reports', $reportData);
-            
-            if ($reportId) {
-                $allFilesUploaded = true;
-                $uploadedFilePaths = [];
+            $uploadedFilePaths = []; // Keep track of files for cleanup
+            try {
+                $db->getConnection()->beginTransaction();
 
-                // Loop through each uploaded file
+                // 1. Build initial report data
+                $reportData = [
+                    'title' => $title,
+                    'description' => $description,
+                    'bully_name' => sanitizeInput($_POST['bully_name'] ?? ''),
+                    'date_of_incident' => $dateOfIncident,
+                    'student_id' => $studentId,
+                    'school_id' => $selectedSchoolId,
+                    'status' => 'submitted',
+                    'submission_date' => date('Y-m-d H:i:s')
+                ];
+                
+                // 2. Handle file uploads and collect evidence data before DB insertion
+                $evidenceDataForDb = [];
+                if (!isset($_FILES['report_files']) || empty($_FILES['report_files']['name'][0])) {
+                    throw new Exception('Please select at least one file to upload.');
+                }
+
                 foreach ($_FILES['report_files']['name'] as $key => $fileName) {
                     if ($_FILES['report_files']['error'][$key] === UPLOAD_ERR_OK) {
                         $file = [
@@ -64,96 +67,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_FILES) && $_SERVER['CONTENT
                         $uploadResult = uploadFile($file);
 
                         if (!$uploadResult['success']) {
-                            $allFilesUploaded = false;
-                            // Accumulate errors or set a general error
-                            $error = 'Failed to upload one or more files. ' . $uploadResult['error'];
-                            break; // Stop processing further files
-                        } else {
-                            $uploadedFilePaths[] = $uploadResult['file_path'];
-                            // Save evidence to database
-                            $evidenceData = [
-                                'report_id' => $reportId,
-                                'file_path' => $uploadResult['file_path'],
-                                'file_name' => $uploadResult['file_name'],
-                                'file_size' => $uploadResult['file_size']
-                            ];
-                            $db->insert('report_evidence', $evidenceData);
+                            throw new Exception('Failed to upload one or more files: ' . $uploadResult['error']);
                         }
+                        
+                        $uploadedFilePaths[] = $uploadResult['local_path'];
+                        $evidenceDataForDb[] = [
+                            'file_path' => $uploadResult['file_path'],
+                            'file_name' => $uploadResult['file_name'],
+                            'file_size' => $uploadResult['file_size']
+                        ];
                     } else {
-                        $allFilesUploaded = false;
-                        $error = 'Error with one or more file uploads. Please try again.';
-                        break;
+                        throw new Exception('Error with an uploaded file. Please try again.');
                     }
                 }
 
-                if ($allFilesUploaded) {
-                    // Run analyzer to determine severity and suggested actions
-                    try {
-                        $analysis = analyze_report([
-                            'title' => $title,
-                            'description' => $description,
-                            'date_of_incident' => $dateOfIncident,
-                            'student_id' => $studentId,
-                            'school_id' => $selectedSchoolId
-                        ], count($uploadedFilePaths));
+                // 3. Run analyzer now that we have all info
+                $analysis = analyze_report($reportData, count($uploadedFilePaths));
+                $reportData['severity'] = $analysis['severity'];
+                $reportData['recommended_actions'] = $analysis['suggested_actions'];
 
-                        $updateData = [];
-                        if (!empty($analysis['severity'])) {
-                            $updateData['severity'] = $analysis['severity'];
-                        }
-                        if (!empty($analysis['suggested_actions'])) {
-                            $updateData['recommended_actions'] = $analysis['suggested_actions'];
-                        }
-
-                        if (!empty($updateData)) {
-                            // Try to persist analysis result; wrap in try/catch in case DB schema doesn't have these columns yet
-                            try {
-                                $db->update('reports', $updateData, 'id = ?', [$reportId]);
-                            } catch (Exception $e) {
-                                // ignore - migration may not have been run
-                            }
-                        }
-                    } catch (Throwable $t) {
-                        // Analyzer should not break submission; ignore errors quietly
-                    }
-                    // Send email to school after successful report submission
-                    require_once __DIR__ . '/../config/mail.php';
-                    require_once __DIR__ . '/../templates/email/load_template.php';
-                    $schoolInfo = $db->fetchOne("SELECT name, email FROM schools WHERE id = ?", [$selectedSchoolId]);
-                    $studentInfo = $db->fetchOne("SELECT first_name, last_name, email, school_id FROM users WHERE id = ?", [$studentId]);
-                    $registeredSchool = $db->fetchOne("SELECT name FROM schools WHERE id = ?", [$studentInfo['school_id']]);
-                    if ($schoolInfo && $schoolInfo['email']) {
-                        // Fetch SMTP settings for the school
-                        $schoolSmtp = $db->fetchOne("SELECT smtp_host, smtp_port, smtp_username, smtp_password, from_email, from_name FROM schools WHERE id = ?", [$selectedSchoolId]);
-                        $subject = "New Report Submitted: {$studentInfo['first_name']} {$studentInfo['last_name']}";
-
-                        $reportUrl = rtrim(BASE_URL, '/') . '/school/manage_report.php?id=' . $reportId;
-                        $body = load_email_template('report_submitted.php', [
-                            'schoolName' => $schoolInfo['name'],
-                            'studentName' => $studentInfo['first_name'] . ' ' . $studentInfo['last_name'],
-                            'studentEmail' => $studentInfo['email'],
-                            'title' => $title,
-                            'dateOfIncident' => formatDate($dateOfIncident),
-                            'description' => $description,
-                            'reportUrl' => $reportUrl,
-                            'appName' => APP_NAME,
-                            'baseUrl' => BASE_URL
-                        ]);
-
-                        sendMail($schoolInfo['email'], $subject, $body, $schoolSmtp['from_email'], $schoolSmtp['from_name']);
-                    }
-                    logActivity($db, $studentId, 'student', 'submit_report', "Submitted report: $title");
-                    redirect('my_reports.php', 'Report submitted successfully! Your report is now awaiting review.', 'success');
-                } else {
-                    // If any file upload failed, delete the report and all successfully uploaded files
-                    $db->delete('reports', 'id = ?', [$reportId]);
-                    foreach ($uploadedFilePaths as $path) {
-                        deleteFile($path);
-                    }
-                    // Error message is already set by the loop
+                // 4. Insert the complete report record
+                $reportId = $db->insert('reports', $reportData);
+                if (!$reportId) {
+                    throw new Exception("Failed to create the report record in the database.");
                 }
-            } else {
-                $error = 'Failed to submit report. Please try again.';
+
+                // 5. Insert evidence records
+                foreach ($evidenceDataForDb as $evidence) {
+                    $evidence['report_id'] = $reportId;
+                    if (!$db->insert('report_evidence', $evidence)) {
+                        throw new Exception("Failed to save evidence records to the database.");
+                    }
+                }
+
+                // 6. If all is well, commit the transaction
+                $db->getConnection()->commit();
+
+                // 7. Send email notification (outside of transaction)
+                require_once __DIR__ . '/../config/mail.php';
+                require_once __DIR__ . '/../templates/email/load_template.php';
+                $schoolInfo = $db->fetchOne("SELECT name, email FROM schools WHERE id = ?", [$selectedSchoolId]);
+                $studentInfo = $db->fetchOne("SELECT first_name, last_name, email, school_id FROM users WHERE id = ?", [$studentId]);
+                
+                if ($schoolInfo && $schoolInfo['email']) {
+                    $schoolSmtp = $db->fetchOne("SELECT smtp_host, smtp_port, smtp_username, smtp_password, from_email, from_name FROM schools WHERE id = ?", [$selectedSchoolId]);
+                    $subject = "New Report Submitted: {$studentInfo['first_name']} {$studentInfo['last_name']}";
+                    $reportUrl = rtrim(BASE_URL, '/') . '/school/manage_report.php?id=' . $reportId;
+                    $body = load_email_template('report_submitted.php', [
+                        'schoolName' => $schoolInfo['name'],
+                        'studentName' => $studentInfo['first_name'] . ' ' . $studentInfo['last_name'],
+                        'studentEmail' => $studentInfo['email'],
+                        'title' => $title,
+                        'dateOfIncident' => formatDate($dateOfIncident),
+                        'description' => $description,
+                        'reportUrl' => $reportUrl,
+                        'appName' => APP_NAME,
+                        'baseUrl' => BASE_URL
+                    ]);
+                    sendMail($schoolInfo['email'], $subject, $body, $schoolSmtp['from_email'], $schoolSmtp['from_name']);
+                }
+                
+                logActivity($db, $studentId, 'student', 'submit_report', "Submitted report: $title");
+                redirect('my_reports.php', 'Report submitted successfully! Your report is now awaiting review.', 'success');
+
+            } catch (Exception $e) {
+                // Something went wrong, rollback and clean up
+                if ($db->getConnection()->inTransaction()) {
+                    $db->getConnection()->rollBack();
+                }
+                foreach ($uploadedFilePaths as $path) {
+                    if (file_exists($path)) {
+                        unlink($path);
+                    }
+                }
+                $error = $e->getMessage();
+                error_log("Report submission failed: " . $error);
             }
         }
     }
@@ -259,7 +247,7 @@ require_once '../includes/header.php';
                             <div id="filePrompt" class="text-muted">
                                 <i class="fas fa-cloud-upload-alt fa-2x"></i>
                                 <p class="mb-0 mt-2">Tap to select files or drag & drop here</p>
-                                <small class="text-muted">PDF, DOC, JPG, PNG, HEIC, HEIF, MP4 and other common formats. Max 50MB per file, up to 3 files.</small>
+                                <small class="text-muted">PDF, DOC, JPG, PNG, HEIC, HEIF, MP4 and other common formats. Max 50MB per file, up to <?php echo MAX_EVIDENCE_FILES; ?> files.</small>
                             </div>
                             <div id="filePreview" style="display:none; margin-top:12px; text-align:center;"></div>
                         </label>
@@ -359,10 +347,10 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (selectedFiles.length > 3) {
-            alert('You can upload a maximum of 3 files.');
-            selectedFiles = selectedFiles.slice(0, 3); // Take only the first 3
-            // Optionally, clear the file input value to prevent submitting more than 3
+        if (selectedFiles.length > <?php echo MAX_EVIDENCE_FILES; ?>) {
+            alert('You can upload a maximum of <?php echo MAX_EVIDENCE_FILES; ?> files.');
+            selectedFiles = selectedFiles.slice(0, <?php echo MAX_EVIDENCE_FILES; ?>); // Take only the first <?php echo MAX_EVIDENCE_FILES; ?>
+            // Optionally, clear the file input value to prevent submitting more than <?php echo MAX_EVIDENCE_FILES; ?>
             // fileInput.value = ''; // This might prevent valid files from being submitted
             // Re-assign files to input if we sliced them
             const dataTransfer = new DataTransfer();

@@ -29,6 +29,7 @@ date_default_timezone_set(TIMEZONE);
 // ---------------------------
 define('UPLOAD_DIR', __DIR__ . '/../uploads/');
 define('MAX_FILE_SIZE', 50 * 1024 * 1024); // 50MB
+define('MAX_EVIDENCE_FILES', 10); // Maximum number of evidence files per report
 define('ALLOWED_FILE_TYPES', ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'wmv', 'mkv', 'heic', 'heif']);
 
 if (!file_exists(UPLOAD_DIR)) {

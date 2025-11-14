@@ -76,6 +76,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $updateData['password'] = password_hash($newPassword, PASSWORD_DEFAULT);
         }
 
+        // Get old values before update
+        $oldUser = $db->fetchOne("SELECT id, first_name, last_name, email, username FROM users WHERE id = ?", [$userId]);
+
         // Update user record
         $result = $db->query(
             "UPDATE users SET " . implode(" = ?, ", array_keys($updateData)) . " = ? WHERE id = ?",
@@ -92,6 +95,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Refresh user data
             $user = $db->fetchOne("SELECT id, first_name, last_name, email, username FROM users WHERE id = ?", [$userId]);
+
+            // Track changes for before/after comparison
+            $changes = [];
+            if ($oldUser['first_name'] !== $first) {
+                $changes['first_name'] = ['old' => $oldUser['first_name'], 'new' => $first];
+            }
+            if ($oldUser['last_name'] !== $last) {
+                $changes['last_name'] = ['old' => $oldUser['last_name'], 'new' => $last];
+            }
+            if ($oldUser['email'] !== $email) {
+                $changes['email'] = ['old' => $oldUser['email'], 'new' => $email];
+            }
+            if ($oldUser['username'] !== $username) {
+                $changes['username'] = ['old' => $oldUser['username'], 'new' => $username];
+            }
+
+            // Notify other system administrators about this profile update
+            require_once __DIR__ . '/../config/mail.php';
+            require_once __DIR__ . '/../templates/email/load_template.php';
+
+            $admins = $db->fetchAll("SELECT * FROM users WHERE role = 'admin' AND id != ?", [$userId]);
+            $updatedBy = $db->fetchOne("SELECT id, first_name, last_name, email FROM users WHERE id = ?", [$userId]);
+
+            $emailData = [
+                'user' => $user,
+                'updatedBy' => $updatedBy,
+                'userRole' => 'Administrator',
+                'changes' => $changes,
+                'timestamp' => date('Y-m-d H:i:s')
+            ];
+
+            $emailBody = load_email_template('profile_updated.php', $emailData);
+            $subject = 'Administrator Profile Updated: ' . $user['first_name'] . ' ' . $user['last_name'];
+
+            foreach ($admins as $admin) {
+                sendMail($admin['email'], $subject, $emailBody);
+            }
         } else {
             $errors[] = 'Failed to update profile.';
         }
