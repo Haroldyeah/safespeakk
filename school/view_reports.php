@@ -14,6 +14,7 @@ $offset = ($page - 1) * $perPage;
 // Search and filters
 $search = $_GET['search'] ?? '';
 $statusFilter = $_GET['status'] ?? '';
+$severityFilter = $_GET['severity'] ?? '';
 $sortBy = $_GET['sort'] ?? 'submission_date';
 $sortOrder = $_GET['order'] ?? 'DESC';
 
@@ -40,6 +41,19 @@ if ($search) {
 if ($statusFilter) {
     $conditions[] = "r.status = ?";
     $params[] = $statusFilter;
+}
+
+// Apply severity filter only if column exists
+if (!empty($severityFilter)) {
+    try {
+        $col = $db->fetchOne("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'severity'", [DB_NAME, 'reports']);
+        if ($col) {
+            $conditions[] = "r.severity = ?";
+            $params[] = $severityFilter;
+        }
+    } catch (Exception $e) {
+        // ignore
+    }
 }
 
 $whereClause = implode(' AND ', $conditions);
@@ -153,6 +167,15 @@ require_once '../includes/header.php';
                     <option value="rejected" <?php echo $statusFilter === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
                 </select>
             </div>
+            <div class="col-md-3">
+                <select class="form-select" name="severity">
+                    <option value="">All Severities</option>
+                    <option value="low" <?php echo $severityFilter === 'low' ? 'selected' : ''; ?>>Low</option>
+                    <option value="medium" <?php echo $severityFilter === 'medium' ? 'selected' : ''; ?>>Medium</option>
+                    <option value="high" <?php echo $severityFilter === 'high' ? 'selected' : ''; ?>>High</option>
+                    <option value="critical" <?php echo $severityFilter === 'critical' ? 'selected' : ''; ?>>Critical</option>
+                </select>
+            </div>
             
             <div class="col-md-3">
                 <select class="form-select" name="sort">
@@ -241,6 +264,7 @@ require_once '../includes/header.php';
                                     <?php endif; ?>
                                 </a>
                             </th>
+                            <th>Involved</th>
                             <th>
                                 <a href="?sort=first_name&order=<?php echo $sortBy === 'first_name' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>" class="text-decoration-none text-white">
                                     Student 
@@ -297,6 +321,7 @@ require_once '../includes/header.php';
                                         <?php endif; ?>
                                     </div>
                                 </td>
+                                <td><?php echo htmlspecialchars($report['bully_name'] ?? '—'); ?></td>
                                 <td>
                                     <div>
                                         <strong><?php echo htmlspecialchars($report['first_name'] . ' ' . $report['last_name']); ?></strong>

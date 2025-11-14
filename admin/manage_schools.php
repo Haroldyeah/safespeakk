@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $updateData['password'] = hashPassword($_POST['password']);
             }
             
-            $success = $db->update('schools', $updateData, 'id = ?', [$schoolId]);
+            $success = $db->update('schools', $updateData, 'id = :id', ['id' => $schoolId]);
             
             if ($success) {
                 logActivity($db, $_SESSION['user_id'], 'admin', 'update_school', "Updated school ID: $schoolId");
@@ -128,9 +128,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Get schools with statistics
 $schools = $db->fetchAll(
     "SELECT s.*, 
-            COUNT(r.id) as report_count,
-            COUNT(u.id) as student_count,
-            SUM(CASE WHEN r.status = 'approved' THEN 1 ELSE 0 END) as approved_count
+            COUNT(DISTINCT r.id) as report_count,
+            COUNT(DISTINCT u.id) as student_count,
+            COUNT(DISTINCT CASE WHEN r.status = 'approved' THEN r.id ELSE NULL END) as approved_count
      FROM schools s 
      LEFT JOIN reports r ON s.id = r.school_id 
      LEFT JOIN users u ON s.id = u.school_id AND u.role = 'student'

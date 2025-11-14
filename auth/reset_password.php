@@ -66,13 +66,19 @@ require_once '../includes/header.php';
                     <?php else: ?>
                         <form method="POST">
                             <input type="hidden" name="token" value="<?php echo htmlspecialchars($token); ?>">
-                            <div class="mb-3">
+                            <div class="mb-3 position-relative">
                                 <label class="form-label small">New Password</label>
-                                <input type="password" name="password" class="form-control" required minlength="6">
+                                <input type="password" id="password" name="password" class="form-control" required minlength="6">
+                                <span class="position-absolute top-50 end-0 translate-middle-y pe-3 toggle-password" style="cursor: pointer; margin-top: 12px;" data-target="#password">
+                                    <i class="fas fa-eye"></i>
+                                </span>
                             </div>
-                            <div class="mb-3">
+                            <div class="mb-3 position-relative">
                                 <label class="form-label small">Confirm Password</label>
-                                <input type="password" name="confirm_password" class="form-control" required minlength="6">
+                                <input type="password" id="confirm_password" name="confirm_password" class="form-control" required minlength="6">
+                                <span class="position-absolute top-50 end-0 translate-middle-y pe-3 toggle-password" style="cursor: pointer; margin-top: 12px;" data-target="#confirm_password">
+                                    <i class="fas fa-eye"></i>
+                                </span>
                             </div>
                             <div class="d-flex gap-2">
                                 <button class="btn btn-primary">Set Password</button>
@@ -83,7 +89,28 @@ require_once '../includes/header.php';
                 </div>
             </div>
         </div>
+        </div>
+</div>
+
+
     </div>
 </div>
 
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const passwordToggles = document.querySelectorAll('.toggle-password');
+
+    passwordToggles.forEach(toggle => {
+        toggle.addEventListener('click', function () {
+            const passwordField = document.querySelector(this.getAttribute('data-target'));
+            const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordField.setAttribute('type', type);
+            this.querySelector('i').classList.toggle('fa-eye-slash');
+            this.querySelector('i').classList.toggle('fa-eye');
+        });
+    });
+});
+</script>
 <?php require_once '../includes/footer.php'; ?>
+
+

@@ -8,12 +8,11 @@ $schoolName = $_SESSION['school_name'];
 
 // Get school statistics
 $stats = [
-    'total_reports' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND deleted_at IS NULL", [$schoolId])['count'],
-    'pending_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'submitted' AND deleted_at IS NULL", [$schoolId])['count'],
-    'under_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'under_review' AND deleted_at IS NULL", [$schoolId])['count'],
-    'approved' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'approved' AND deleted_at IS NULL", [$schoolId])['count'],
-    'rejected' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'rejected' AND deleted_at IS NULL", [$schoolId])['count'],
-    'revision_required' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'revision_required' AND deleted_at IS NULL", [$schoolId])['count']
+    'total_reports' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ?", [$schoolId])['count'],
+    'pending_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'submitted'", [$schoolId])['count'],
+    'under_investigation' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'under_investigation'", [$schoolId])['count'],
+    'verified' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'verified'", [$schoolId])['count'],
+    'rejected' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'rejected'", [$schoolId])['count']
 ];
 // Count students registered to this school
 $stats['students'] = $db->fetchOne("SELECT COUNT(*) as count FROM users WHERE school_id = ? AND role = 'student'", [$schoolId])['count'];
@@ -23,7 +22,7 @@ $recentReports = $db->fetchAll(
     "SELECT r.*, u.first_name, u.last_name, u.student_id 
      FROM reports r 
      JOIN users u ON r.student_id = u.id 
-     WHERE r.school_id = ? AND r.deleted_at IS NULL 
+     WHERE r.school_id = ? 
      ORDER BY r.submission_date DESC 
      LIMIT 10",
     [$schoolId]
@@ -35,7 +34,7 @@ $monthlyStats = $db->fetchAll(
         DATE_FORMAT(submission_date, '%Y-%m') as month,
         COUNT(*) as count
      FROM reports 
-     WHERE school_id = ? AND submission_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH) AND deleted_at IS NULL
+     WHERE school_id = ? AND submission_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
      GROUP BY DATE_FORMAT(submission_date, '%Y-%m')
      ORDER BY month DESC",
     [$schoolId]
@@ -100,16 +99,16 @@ require_once '../includes/header.php';
         <div class="icon">
             <i class="fas fa-eye"></i>
         </div>
-        <h3><?php echo $stats['under_review']; ?></h3>
-        <p>Under Review</p>
+        <h3><?php echo $stats['under_investigation']; ?></h3>
+        <p>Under Investigation</p>
     </div>
     
     <div class="dashboard-card"">
         <div class="icon">
             <i class="fas fa-check-circle"></i>
         </div>
-        <h3><?php echo $stats['approved']; ?></h3>
-        <p>Approved</p>
+        <h3><?php echo $stats['verified']; ?></h3>
+        <p>Verified</p>
     </div>
 </div>
 
@@ -194,21 +193,21 @@ require_once '../includes/header.php';
             <div class="card-body">
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <small>Approved</small>
-                        <small class="text-success fw-bold"><?php echo $stats['approved']; ?></small>
+                        <small>Verified</small>
+                        <small class="text-success fw-bold"><?php echo $stats['verified']; ?></small>
                     </div>
                     <div class="progress mb-2" style="height: 6px;">
-                        <div class="progress-bar bg-success" style="width: <?php echo $stats['total_reports'] > 0 ? ($stats['approved'] / $stats['total_reports']) * 100 : 0; ?>%"></div>
+                        <div class="progress-bar bg-success" style="width: <?php echo $stats['total_reports'] > 0 ? ($stats['verified'] / $stats['total_reports']) * 100 : 0; ?>%"></div>
                     </div>
                 </div>
                 
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <small>Under Review</small>
-                        <small class="text-info fw-bold"><?php echo $stats['under_review']; ?></small>
+                        <small>Under Investigation</small>
+                        <small class="text-info fw-bold"><?php echo $stats['under_investigation']; ?></small>
                     </div>
                     <div class="progress mb-2" style="height: 6px;">
-                        <div class="progress-bar bg-info" style="width: <?php echo $stats['total_reports'] > 0 ? ($stats['under_review'] / $stats['total_reports']) * 100 : 0; ?>%"></div>
+                        <div class="progress-bar bg-info" style="width: <?php echo $stats['total_reports'] > 0 ? ($stats['under_investigation'] / $stats['total_reports']) * 100 : 0; ?>%"></div>
                     </div>
                 </div>
                 

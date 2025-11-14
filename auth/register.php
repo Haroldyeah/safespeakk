@@ -86,6 +86,9 @@ if ($_POST) {
             if (!$school) {
                 $error = 'Selected school is not valid.';
             } else {
+                $verificationToken = bin2hex(random_bytes(32));
+                $tokenExpires = date('Y-m-d H:i:s', strtotime('+24 hours'));
+
                 // Create user account
                 $userData = [
                     'username' => $username,
@@ -96,62 +99,39 @@ if ($_POST) {
                     'role' => 'student',
                     'student_id' => $studentId,
                     'school_id' => $schoolId,
-                    'id_photo_path' => $idPhotoPath
+                    'id_photo_path' => $idPhotoPath,
+                    'is_verified' => 0,
+                    'verification_token' => $verificationToken,
+                    'verification_token_expires_at' => $tokenExpires
                 ];
                 
                 $userId = $db->insert('users', $userData);
                 
                 if ($userId) {
-                    logActivity($db, $userId, 'student', 'register', 'New student account created');
+                    logActivity($db, $userId, 'student', 'register', 'New student account created, verification pending.');
 
-                    // Send professional welcome email to student
+                    // Send verification email
                     require_once __DIR__ . '/../config/mail.php';
-                    $studentSubject = "Welcome to " . APP_NAME . ", {$firstName}!";
-                    $studentBody = "<div style='font-family: Arial, sans-serif; color: #333;'>"
-                        . "<h2 style='color:#0d6efd;'>Welcome, " . htmlspecialchars($firstName) . "</h2>"
-                        . "<p>Your account has been created successfully for <strong>" . htmlspecialchars($username) . "</strong>. You can now sign in to your student dashboard to submit reports and view your submissions.</p>"
-                        . "<p><strong>Quick links:</strong></p>"
-                        . "<ul>"
-                        . "<li><a href='" . BASE_URL . "auth/login.php'>Sign in to your account</a></li>"
-                        . "<li><a href='" . BASE_URL . "'>Visit SafeSpeak homepage</a></li>"
-                        . "</ul>"
-                        . "<p>If you did not create this account, please contact your school administration or reply to this email.</p>"
-                        . "<p style='font-size:12px; color:#666;'>Regards,<br/>" . APP_NAME . " Team</p>"
-                        . "</div>";
+                    $verificationLink = BASE_URL . 'auth/verify_email.php?token=' . $verificationToken;
+                    
+                    $subject = 'Verify Your Email for ' . APP_NAME;
+                    $body = "<p>Hello " . htmlspecialchars($firstName) . ",</p>"
+                          . "<p>Thank you for registering. Please click the link below to verify your email address:</p>"
+                          . "<p><a href='" . $verificationLink . "'>" . $verificationLink . "</a></p>"
+                          . "<p>This link will expire in 24 hours.</p>"
+                          . "<p>If you did not create this account, please ignore this email.</p>";
 
-                    sendMail($email, $studentSubject, $studentBody);
+                    sendMail($email, $subject, $body);
 
-                    // Notify the school of the new registration (if school email available)
-                    $schoolInfo = $db->fetchOne('SELECT id, name, email, contact_person FROM schools WHERE id = ?', [$schoolId]);
+                    // Notify the school of the new registration
+                    $schoolInfo = $db->fetchOne('SELECT id, name, email FROM schools WHERE id = ?', [$schoolId]);
                     if ($schoolInfo && !empty($schoolInfo['email'])) {
-                        $schoolSubject = "New student registered: " . htmlspecialchars($firstName . ' ' . $lastName);
-                        $schoolBody = "<div style='font-family: Arial, sans-serif; color: #333;'>"
-                            . "<h3 style='color:#0d6efd;'>New Student Registration</h3>"
-                            . "<p>A new student has registered to your school (<strong>" . htmlspecialchars($schoolInfo['name']) . "</strong>).</p>"
-                            . "<table style='width:100%; font-size:14px; border-collapse:collapse;'>"
-                            . "<tr><td style='padding:6px; border:1px solid #eee;'><strong>Name</strong></td><td style='padding:6px; border:1px solid #eee;'>" . htmlspecialchars($firstName . ' ' . $lastName) . "</td></tr>"
-                            . "<tr><td style='padding:6px; border:1px solid #eee;'><strong>Username</strong></td><td style='padding:6px; border:1px solid #eee;'>" . htmlspecialchars($username) . "</td></tr>"
-                            . "<tr><td style='padding:6px; border:1px solid #eee;'><strong>Email</strong></td><td style='padding:6px; border:1px solid #eee;'>" . htmlspecialchars($email) . "</td></tr>"
-                            . "<tr><td style='padding:6px; border:1px solid #eee;'><strong>Student ID</strong></td><td style='padding:6px; border:1px solid #eee;'>" . htmlspecialchars($studentId) . "</td></tr>"
-                            . "</table>"
-                            . "<p>You can review this student in your admin dashboard. If you did not expect this registration, please investigate.</p>"
-                            . "<p style='font-size:12px; color:#666;'>Regards,<br/>" . APP_NAME . " Team</p>"
-                            . "</div>";
-
+                        $schoolSubject = "New Student Registration Pending Verification: " . htmlspecialchars($firstName . ' ' . $lastName);
+                        $schoolBody = "<p>A new student, " . htmlspecialchars($firstName . ' ' . $lastName) . ", has registered under your school, " . htmlspecialchars($schoolInfo['name']) . ". Their account is pending email verification.</p>";
                         sendMail($schoolInfo['email'], $schoolSubject, $schoolBody);
                     }
 
-                    $success = 'Account created successfully! You can now log in.';
-
-                    // Auto-login the user
-                    $_SESSION['user_id'] = $userId;
-                    $_SESSION['username'] = $username;
-                    $_SESSION['first_name'] = $firstName;
-                    $_SESSION['last_name'] = $lastName;
-                    $_SESSION['role'] = 'student';
-                    $_SESSION['school_id'] = $schoolId;
-
-                    redirect('../student/dashboard.php', 'Welcome to the SafeSpeak, ' . $firstName . '!', 'success');
+                    redirect('login.php', 'Account created successfully! Please check your email to complete your registration.', 'success');
                 } else {
                     $error = 'Failed to create account. Please try again.';
                 }
@@ -224,13 +204,19 @@ require_once '../includes/header.php';
                                 <input type="email" class="form-control" id="email" name="email" value="<?php echo htmlspecialchars($email ?? ''); ?>" required>
                             </div>
 
-                            <div class="col-md-6">
+                            <div class="col-md-6 position-relative">
                                 <label for="password" class="form-label small fw-semibold">Password *</label>
                                 <input type="password" class="form-control" id="password" name="password" minlength="6" required>
+                                <span class="position-absolute top-50 end-0 translate-middle-y pe-3 toggle-password" style="cursor: pointer; margin-top: 12px;" data-target="#password">
+                                    <i class="fas fa-eye"></i>
+                                </span>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-6 position-relative">
                                 <label for="confirm_password" class="form-label small fw-semibold">Confirm Password *</label>
                                 <input type="password" class="form-control" id="confirm_password" name="confirm_password" minlength="6" required>
+                                <span class="position-absolute top-50 end-0 translate-middle-y pe-3 toggle-password" style="cursor: pointer; margin-top: 12px;" data-target="#confirm_password">
+                                    <i class="fas fa-eye"></i>
+                                </span>
                             </div>
 
                             <div class="col-md-6">
@@ -300,4 +286,20 @@ if (idPhoto) {
     });
 }
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const passwordToggles = document.querySelectorAll('.toggle-password');
+
+    passwordToggles.forEach(toggle => {
+        toggle.addEventListener('click', function () {
+            const passwordField = document.querySelector(this.getAttribute('data-target'));
+            const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordField.setAttribute('type', type);
+            this.querySelector('i').classList.toggle('fa-eye-slash');
+            this.querySelector('i').classList.toggle('fa-eye');
+        });
+    });
+});
+</script>
+
 

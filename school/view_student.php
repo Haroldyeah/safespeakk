@@ -11,7 +11,7 @@ if (!$student) {
     redirect('students.php', 'Student not found or access denied', 'error');
 }
 
-$reports = $db->fetchAll("SELECT id, title, status, submission_date FROM reports WHERE student_id = ? ORDER BY submission_date DESC", [$studentId]);
+$reports = $db->fetchAll("SELECT id, title, status, submission_date FROM reports WHERE student_id = ? AND deleted_at IS NULL ORDER BY submission_date DESC", [$studentId]);
 
 require_once '../includes/header.php';
 ?>

@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $updateData['password'] = hashPassword($_POST['password']);
                 }
 
-                $success = $db->update('users', $updateData, 'id = ?', [$userId]);
+                $success = $db->update('users', $updateData, 'id = :id', ['id' => $userId]);
 
                 if ($success) {
                     logActivity($db, $_SESSION['user_id'], 'admin', 'update_user', "Updated user ID: $userId");

@@ -10,8 +10,8 @@ $schoolId = $_SESSION['school_id'];
 $stats = [
     'total_reports' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE student_id = ?", [$studentId])['count'],
     'submitted' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE student_id = ? AND status = 'submitted'", [$studentId])['count'],
-    'approved' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE student_id = ? AND status = 'approved'", [$studentId])['count'],
-    'under_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE student_id = ? AND status = 'under_review'", [$studentId])['count']
+    'verified' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE student_id = ? AND status = 'verified'", [$studentId])['count'],
+    'under_investigation' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE student_id = ? AND status = 'under_investigation'", [$studentId])['count']
 ];
 
 // Get recent reports
@@ -71,16 +71,16 @@ require_once '../includes/header.php';
         <div class="icon">
             <i class="fas fa-eye"></i>
         </div>
-        <h3><?php echo $stats['under_review']; ?></h3>
-        <p>Under Review</p>
+        <h3><?php echo $stats['under_investigation']; ?></h3>
+        <p>Under Investigation</p>
     </div>
     
     <div class="dashboard-card">
         <div class="icon">
             <i class="fas fa-check-circle"></i>
         </div>
-        <h3><?php echo $stats['approved']; ?></h3>
-        <p>Approved</p>
+        <h3><?php echo $stats['verified']; ?></h3>
+        <p>Verified</p>
     </div>
 </div>
 
@@ -278,12 +278,16 @@ require_once '../includes/header.php';
                     <small>Awaiting initial review</small>
                 </div>
                 <div class="mb-2">
-                    <span class="status-badge status-under_review me-2">Under Review</span>
+                    <span class="status-badge status-under_investigation me-2">Under Investigation</span>
                     <small>Being evaluated</small>
                 </div>
                 <div class="mb-2">
-                    <span class="status-badge status-approved me-2">Approved</span>
+                    <span class="status-badge status-verified me-2">Verified</span>
                     <small>Successfully accepted</small>
+                </div>
+                <div class="mb-2">
+                    <span class="status-badge status-referred_to_mswd me-2">Referred to MSWD</span>
+                    <small>Referred to MSWD for further action</small>
                 </div>
                 <div class="mb-2">
                     <span class="status-badge status-rejected me-2">Rejected</span>

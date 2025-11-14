@@ -63,11 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'address' => $address
         ];
 
-        // If email is updated, also update from_email
-        if ($email !== $school['email']) {
-            $updateData['from_email'] = $email;
-        }
-
         // Add password to update if changing
         if ($newPassword !== '') {
             $updateData['password'] = password_hash($newPassword, PASSWORD_DEFAULT);

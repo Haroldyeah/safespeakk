@@ -904,3 +904,29 @@ html.dark-mode .tab-content {
         grid-template-columns: 1fr !important;
     }
 }
+
+/* Severity Badges for Dark Mode */
+html.dark-mode .severity-low {
+    background-color: #1F2937; /* Darker green-gray */
+    color: #A7F3D0; /* Light green text */
+    border: 1px solid #365314;
+}
+
+html.dark-mode .severity-medium {
+    background-color: #3A3021; /* Darker amber */
+    color: #FDE68A; /* Light amber text */
+    border: 1px solid #854d0e;
+}
+
+html.dark-mode .severity-high {
+    background-color: #3E2525; /* Darker red */
+    color: #FECACA; /* Light red text */
+    border: 1px solid #991b1b;
+}
+
+html.dark-mode .severity-critical {
+    background-color: #4A2328; /* Darker intense red */
+    color: #FEE2E2; /* Light red text */
+    border: 1px solid #6b0216;
+    font-weight: 700;
+}

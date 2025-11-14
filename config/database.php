@@ -11,7 +11,7 @@ if (isset($_ENV['PGHOST'])) {
     define('DB_TYPE', 'pgsql');
 } else {
     // Production environment with MySQL
-    define('DB_HOST', 'localhost');
+    define('DB_HOST', '127.0.0.1');
     define('DB_USERNAME', 'root');
     define('DB_PASSWORD', '');
     define('DB_NAME', 'capstone_system');
@@ -54,6 +54,7 @@ class Database {
                         PDO::ATTR_EMULATE_PREPARES => false
                     ]
                 );
+                $this->connection->exec("SET time_zone = '+08:00'");
             }
         } catch (PDOException $e) {
             die("Database connection failed: " . $e->getMessage());
@@ -67,8 +68,12 @@ class Database {
     public function query($sql, $params = []) {
         try {
             $stmt = $this->connection->prepare($sql);
-            $stmt->execute($params);
-            return $stmt;
+            $success = $stmt->execute($params);
+            if ($success) {
+                return $stmt;
+            } else {
+                return false;
+            }
         } catch (PDOException $e) {
             error_log("Database query error: " . $e->getMessage());
             return false;
@@ -102,10 +107,20 @@ class Database {
         $setClause = implode(', ', $setParts);
         
         $sql = "UPDATE {$table} SET {$setClause} WHERE {$where}";
+        
+        // Properly merge data and where parameters
         $params = array_merge($data, $whereParams);
         
         error_log('SQL: ' . $sql . ' PARAMS: ' . print_r($params, true));
-        return $this->query($sql, $params);
+        
+        try {
+            $stmt = $this->connection->prepare($sql);
+            $result = $stmt->execute($params);
+            return $result ? $stmt : false;
+        } catch (PDOException $e) {
+            error_log("Database update error: " . $e->getMessage());
+            return false;
+        }
     }
     
     public function delete($table, $where, $params = []) {

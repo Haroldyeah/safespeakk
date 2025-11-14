@@ -13,6 +13,7 @@ $offset = ($page - 1) * $perPage;
 $search = $_GET['search'] ?? '';
 $statusFilter = $_GET['status'] ?? '';
 $schoolFilter = $_GET['school'] ?? '';
+$severityFilter = $_GET['severity'] ?? '';
 $sortBy = $_GET['sort'] ?? 'submission_date';
 $sortOrder = $_GET['order'] ?? 'DESC';
 
@@ -20,7 +21,7 @@ $sortOrder = $_GET['order'] ?? 'DESC';
 $viewReportId = (int)($_GET['id'] ?? 0);
 
 // Valid sort columns
-$validSortColumns = ['submission_date', 'title', 'status', 'first_name', 'report_school_name'];
+$validSortColumns = ['submission_date', 'title', 'status', 'first_name', 'report_school_name', 'severity'];
 if (!in_array($sortBy, $validSortColumns)) {
     $sortBy = 'submission_date';
 }
@@ -50,6 +51,19 @@ if ($statusFilter) {
 if ($schoolFilter) {
     $conditions[] = "r.school_id = ?";
     $params[] = $schoolFilter;
+}
+
+// Apply severity filter only if the column exists (safe for systems that haven't run migration)
+if (!empty($severityFilter)) {
+    try {
+        $col = $db->fetchOne("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'severity'", [DB_NAME, 'reports']);
+        if ($col) {
+            $conditions[] = "r.severity = ?";
+            $params[] = $severityFilter;
+        }
+    } catch (Exception $e) {
+        // ignore - severity column may not exist
+    }
 }
 
 $whereClause = implode(' AND ', $conditions);
@@ -103,11 +117,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Debug log
     file_put_contents(__DIR__ . '/../debug_admin_status.log', date('Y-m-d H:i:s') . "\nINPUT: " . var_export($input, true) . "\n", FILE_APPEND);
     
-    if ($input['action'] === 'update_status') {
+        if ($input['action'] === 'update_status') {
         $reportId = (int)$input['report_id'];
         $newStatus = $input['status'];
         $comments = $input['comments'] ?? '';
-        $validStatuses = ['submitted', 'under_review', 'approved', 'rejected', 'revision_required'];
+        $validStatuses = ['submitted', 'under_investigation', 'referred_to_mswd', 'verified', 'rejected'];
         header('Content-Type: application/json');
         if (!in_array($newStatus, $validStatuses)) {
             file_put_contents(__DIR__ . '/../debug_admin_status.log', "Invalid status: $newStatus\n", FILE_APPEND);
@@ -203,6 +217,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         exit;
     }
+
+    // Handle add intervention (regular form POST, not JSON)
+    if (!empty($_POST['action']) && $_POST['action'] === 'add_intervention') {
+        $reportId = (int)($_POST['report_id'] ?? 0);
+        $sessionDate = $_POST['session_date'] ?? '';
+        $counselorName = $_POST['counselor_name'] ?? '';
+        $notes = $_POST['notes'] ?? '';
+        $outcome = $_POST['outcome'] ?? '';
+        
+        if (!$reportId || !$sessionDate) {
+            $_SESSION['error'] = 'Report ID and Session Date are required.';
+            header("Location: all_reports.php?id=$reportId");
+            exit;
+        }
+        
+        // Verify report exists
+        $report = $db->fetchOne("SELECT r.*, u.email, u.first_name, u.last_name FROM reports r JOIN users u ON r.student_id = u.id WHERE r.id = ?", [$reportId]);
+        if (!$report) {
+            $_SESSION['error'] = 'Report not found.';
+            header("Location: all_reports.php");
+            exit;
+        }
+        
+        // Insert intervention
+        $interventionData = [
+            'report_id' => $reportId,
+            'added_by_user_id' => $_SESSION['user_id'],
+            'added_by_type' => 'admin',
+            'session_date' => $sessionDate,
+            'counselor_name' => $counselorName,
+            'notes' => $notes,
+            'outcome' => $outcome,
+            'created_at' => date('Y-m-d H:i:s')
+        ];
+        
+        try {
+            $success = $db->insert('interventions', $interventionData);
+            if ($success) {
+                // Send email notification to student
+                $schoolIdForReport = $report['school_id'] ?? 0;
+                $schoolSmtp = $db->fetchOne("SELECT smtp_host, smtp_port, smtp_username, smtp_password, from_email, from_name FROM schools WHERE id = ?", [$schoolIdForReport]);
+                
+                if ($report['email'] && $schoolSmtp) {
+                    require_once __DIR__ . '/../templates/email/load_template.php';
+                    $body = load_email_template('intervention_added.php', [
+                        'studentName' => $report['first_name'] . ' ' . $report['last_name'],
+                        'reportTitle' => $report['title'],
+                        'sessionDate' => formatDate($sessionDate),
+                        'counselorName' => $counselorName,
+                        'notes' => $notes,
+                        'outcome' => $outcome,
+                        'appName' => APP_NAME,
+                        'baseUrl' => BASE_URL
+                    ]);
+                    $subject = "Intervention Recorded for Report: {$report['title']}";
+                    
+                    try {
+                        sendMail(
+                            $report['email'],
+                            $subject,
+                            $body,
+                            $schoolSmtp['from_email'],
+                            $schoolSmtp['from_name']
+                        );
+                    } catch (Exception $e) {
+                        error_log('Mail Error: ' . $e->getMessage());
+                    }
+                }
+                
+                // Log activity
+                logActivity($db, $_SESSION['user_id'], 'admin', 'add_intervention', "Added intervention to report #$reportId");
+                
+                $_SESSION['success'] = 'Intervention recorded successfully and student notified.';
+            } else {
+                $_SESSION['error'] = 'Failed to record intervention.';
+            }
+        } catch (Exception $e) {
+            error_log('Intervention Error: ' . $e->getMessage());
+            $_SESSION['error'] = 'An error occurred while recording the intervention.';
+        }
+        
+        header("Location: all_reports.php?id=$reportId");
+        exit;
+    }
 }
 
 // Calculate pagination
@@ -248,10 +346,20 @@ require_once '../includes/header.php';
                 <select class="form-select" name="status">
                     <option value="">All Statuses</option>
                     <option value="submitted" <?php echo $statusFilter === 'submitted' ? 'selected' : ''; ?>>Submitted</option>
-                    <option value="under_review" <?php echo $statusFilter === 'under_review' ? 'selected' : ''; ?>>Under Review</option>
-                    <option value="approved" <?php echo $statusFilter === 'approved' ? 'selected' : ''; ?>>Approved</option>
+                    <option value="under_investigation" <?php echo $statusFilter === 'under_investigation' ? 'selected' : ''; ?>>Under Investigation</option>
+                    <option value="referred_to_mswd" <?php echo $statusFilter === 'referred_to_mswd' ? 'selected' : ''; ?>>Referred to MSWD</option>
+                    <option value="verified" <?php echo $statusFilter === 'verified' ? 'selected' : ''; ?>>Verified</option>
                     <option value="rejected" <?php echo $statusFilter === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
-                    <option value="revision_required" <?php echo $statusFilter === 'revision_required' ? 'selected' : ''; ?>>Revision Required</option>
+                </select>
+            </div>
+            
+            <div class="col-md-2">
+                <select class="form-select" name="severity">
+                    <option value="">All Severities</option>
+                    <option value="low" <?php echo $severityFilter === 'low' ? 'selected' : ''; ?>>Low</option>
+                    <option value="medium" <?php echo $severityFilter === 'medium' ? 'selected' : ''; ?>>Medium</option>
+                    <option value="high" <?php echo $severityFilter === 'high' ? 'selected' : ''; ?>>High</option>
+                    <option value="critical" <?php echo $severityFilter === 'critical' ? 'selected' : ''; ?>>Critical</option>
                 </select>
             </div>
             
@@ -274,6 +382,7 @@ require_once '../includes/header.php';
                     <option value="first_name" <?php echo $sortBy === 'first_name' ? 'selected' : ''; ?>>Sort by Student</option>
                     <option value="report_school_name" <?php echo $sortBy === 'report_school_name' ? 'selected' : ''; ?>>Sort by School</option>
                     <option value="status" <?php echo $sortBy === 'status' ? 'selected' : ''; ?>>Sort by Status</option>
+                    <option value="severity" <?php echo $sortBy === 'severity' ? 'selected' : ''; ?>>Sort by Severity</option>
                 </select>
             </div>
             
@@ -354,6 +463,7 @@ require_once '../includes/header.php';
                                     <?php endif; ?>
                                 </a>
                             </th>
+                            <th>Involved</th>
                             <th>
                                 <a href="?sort=first_name&order=<?php echo $sortBy === 'first_name' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>" class="text-decoration-none text-white">
                                     Student 
@@ -371,7 +481,7 @@ require_once '../includes/header.php';
                                 </a>
                             </th>
                             <th>
-                                <a href="?sort=status&order=<?php echo $sortBy === 'status' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>" class="text-decoration-none text-white">
+                                <a href="?sort=status&order=<?php echo $sortBy === 'status' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>&severity=<?php echo urlencode($severityFilter); ?>" class="text-decoration-none text-white">
                                     Status 
                                     <?php if ($sortBy === 'status'): ?>
                                         <i class="fas fa-sort-<?php echo $sortOrder === 'ASC' ? 'up' : 'down'; ?>"></i>
@@ -379,7 +489,15 @@ require_once '../includes/header.php';
                                 </a>
                             </th>
                             <th>
-                                <a href="?sort=submission_date&order=<?php echo $sortBy === 'submission_date' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>" class="text-decoration-none text-white">
+                                <a href="?sort=severity&order=<?php echo $sortBy === 'severity' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>&severity=<?php echo urlencode($severityFilter); ?>" class="text-decoration-none text-white">
+                                    Severity
+                                    <?php if ($sortBy === 'severity'): ?>
+                                        <i class="fas fa-sort-<?php echo $sortOrder === 'ASC' ? 'up' : 'down'; ?>"></i>
+                                    <?php endif; ?>
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?sort=submission_date&order=<?php echo $sortBy === 'submission_date' && $sortOrder === 'ASC' ? 'DESC' : 'ASC'; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>&severity=<?php echo urlencode($severityFilter); ?>" class="text-decoration-none text-white">
                                     Submitted 
                                     <?php if ($sortBy === 'submission_date'): ?>
                                         <i class="fas fa-sort-<?php echo $sortOrder === 'ASC' ? 'up' : 'down'; ?>"></i>
@@ -407,6 +525,7 @@ require_once '../includes/header.php';
                                         <?php endif; ?>
                                     </div>
                                 </td>
+                                <td><?php echo htmlspecialchars($report['bully_name'] ?? '—'); ?></td>
                                 <td>
                                     <div>
                                         <strong><?php echo htmlspecialchars($report['first_name'] . ' ' . $report['last_name']); ?></strong>
@@ -424,7 +543,16 @@ require_once '../includes/header.php';
                                 </td>
                                 <td>
                                     <span class="status-badge status-<?php echo $report['status']; ?>">
-                                        <?php echo ucfirst(str_replace('_', ' ', $report['status'])); ?>
+                                        <?php echo str_replace('_', ' ', $report['status']); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <?php
+                                    $severity = $report['severity'] ?? 'N/A';
+                                    $severityClass = ($severity === 'N/A') ? 'n-a' : strtolower($severity);
+                                    ?>
+                                    <span class="severity-badge severity-<?php echo $severityClass; ?>">
+                                        <?php echo htmlspecialchars($severity); ?>
                                     </span>
                                 </td>
                                 <td>
@@ -442,16 +570,20 @@ require_once '../includes/header.php';
                                             </button>
                                             <ul class="dropdown-menu">
                                                 <li>
-                                                    <button class="dropdown-item" onclick="updateStatus(<?php echo $report['id']; ?>, 'under_review')">
-                                                        <i class="fas fa-eye text-info me-1"></i>Mark Under Review
+                                                    <button class="dropdown-item" onclick="updateStatus(<?php echo $report['id']; ?>, 'under_investigation')">
+                                                        <i class="fas fa-search text-primary me-1"></i>Mark Under Investigation
                                                     </button>
                                                 </li>
                                                 <li>
-                                                    <button class="dropdown-item" onclick="updateStatus(<?php echo $report['id']; ?>, 'approved')">
-                                                        <i class="fas fa-check text-success me-1"></i>Approve
+                                                    <button class="dropdown-item" onclick="updateStatus(<?php echo $report['id']; ?>, 'referred_to_mswd')">
+                                                        <i class="fas fa-share-square text-dark me-1"></i>Refer to MSWD
                                                     </button>
                                                 </li>
-                                            
+                                                <li>
+                                                    <button class="dropdown-item" onclick="updateStatus(<?php echo $report['id']; ?>, 'verified')">
+                                                        <i class="fas fa-check-circle text-success me-1"></i>Mark Verified
+                                                    </button>
+                                                </li>
                                                 <li>
                                                     <button class="dropdown-item" onclick="updateStatus(<?php echo $report['id']; ?>, 'rejected')">
                                                         <i class="fas fa-times text-danger me-1"></i>Reject
@@ -591,8 +723,42 @@ require_once '../includes/header.php';
                             </div>
                             <?php endif; ?>
                             <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold">Name of Bully:</div>
+                                <div class="col-sm-9"><?php echo htmlspecialchars($viewReport['bully_name'] ?? 'Not specified'); ?></div>
+                            </div>
+                            <div class="row mb-3">
                                 <div class="col-sm-3 fw-bold">Description:</div>
                                 <div class="col-sm-9"><?php echo nl2br(htmlspecialchars($viewReport['description'])); ?></div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold">Recommended Actions:</div>
+                                <div class="col-sm-9">
+                                    <?php
+                                    // Prefer stored recommended actions (if DB has them). Otherwise run analyzer for detailed actions and severity.
+                                    $recommendedActions = $viewReport['recommended_actions'] ?? '';
+                                    $severityLabel = $viewReport['severity'] ?? '';
+
+                                    if (empty($recommendedActions) || empty($severityLabel)) {
+                                        try {
+                                            $analysis = analyze_report($viewReport, !empty($viewReport['evidence']) ? count($viewReport['evidence']) : 0);
+                                            if (empty($recommendedActions) && !empty($analysis['suggested_actions'])) {
+                                                $recommendedActions = $analysis['suggested_actions'];
+                                            }
+                                            if (empty($severityLabel) && !empty($analysis['severity'])) {
+                                                $severityLabel = $analysis['severity'];
+                                            }
+                                        } catch (Throwable $t) {
+                                            // fallback: leave as-is
+                                        }
+                                    }
+
+                                    if (!empty($severityLabel)) {
+                                        echo '<div class="mb-2"><strong>Severity:</strong> <span class="badge bg-danger text-white">' . htmlspecialchars(ucfirst($severityLabel)) . '</span></div>';
+                                    }
+
+                                    echo nl2br(htmlspecialchars($recommendedActions ?: 'No recommended actions available.'));
+                                    ?>
+                                </div>
                             </div>
                             <div class="row mb-3">
                                 <div class="col-sm-3 fw-bold">Status:</div>
@@ -605,6 +771,10 @@ require_once '../includes/header.php';
                             <div class="row mb-3">
                                 <div class="col-sm-3 fw-bold">Submitted:</div>
                                 <div class="col-sm-9"><?php echo formatDate($viewReport['submission_date']); ?></div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-sm-3 fw-bold">Evidence:</div>
+                                <div class="col-sm-9"><?php echo !empty($viewReport['evidence']) ? count($viewReport['evidence']) . ' file(s)' : 'None'; ?></div>
                             </div>
                             <?php if (!empty($viewReport['evidence'])): ?>
                             <div class="row mb-3">
@@ -670,6 +840,103 @@ require_once '../includes/header.php';
                             </div>
                             <?php endif; ?>
                         </div>
+
+                        <!-- Interventions Section -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <h6 class="mb-0">Interventions</h6>
+                            </div>
+                            <div class="card-body">
+                                <?php
+                                // Fetch existing interventions for this report
+                                try {
+                                    $interventions = $db->fetchAll(
+                                        "SELECT i.*, u.first_name, u.last_name, s.name as school_name 
+                                         FROM interventions i 
+                                         LEFT JOIN users u ON i.added_by_user_id = u.id 
+                                         LEFT JOIN schools s ON u.school_id = s.id 
+                                         WHERE i.report_id = ? 
+                                         ORDER BY i.session_date DESC",
+                                        [$viewReport['id']]
+                                    );
+                                } catch (Exception $e) {
+                                    $interventions = [];
+                                }
+                                ?>
+                                
+                                <?php if (!empty($interventions)): ?>
+                                    <div class="mb-3">
+                                        <h6>Existing Interventions</h6>
+                                        <div style="max-height: 300px; overflow-y: auto;">
+                                            <table class="table table-sm table-hover">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Date</th>
+                                                        <th>Counselor</th>
+                                                        <th>Outcome</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <?php foreach ($interventions as $intervention): ?>
+                                                        <tr>
+                                                            <td>
+                                                                <small><?php echo formatDate($intervention['session_date']); ?></small>
+                                                            </td>
+                                                            <td>
+                                                                <small><?php echo htmlspecialchars($intervention['counselor_name'] ?? 'N/A'); ?></small>
+                                                            </td>
+                                                            <td>
+                                                                <small><?php echo htmlspecialchars($intervention['outcome'] ?? 'Pending'); ?></small>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                <?php else: ?>
+                                    <p class="text-muted small">No interventions recorded yet.</p>
+                                <?php endif; ?>
+
+                                <hr>
+                                <h6>Add New Intervention</h6>
+                                <form id="addInterventionForm" method="POST" action="all_reports.php">
+                                    <input type="hidden" name="action" value="add_intervention">
+                                    <input type="hidden" name="report_id" value="<?php echo $viewReport['id']; ?>">
+                                    
+                                    <div class="mb-2">
+                                        <label for="sessionDate" class="form-label form-label-sm">Session Date <span class="text-danger">*</span></label>
+                                        <input type="date" class="form-control form-control-sm" id="sessionDate" name="session_date" required>
+                                    </div>
+                                    
+                                    <div class="mb-2">
+                                        <label for="counselorName" class="form-label form-label-sm">Counselor Name</label>
+                                        <input type="text" class="form-control form-control-sm" id="counselorName" name="counselor_name" placeholder="e.g., Dr. John Smith">
+                                    </div>
+                                    
+                                    <div class="mb-2">
+                                        <label for="interventionNotes" class="form-label form-label-sm">Notes</label>
+                                        <textarea class="form-control form-control-sm" id="interventionNotes" name="notes" rows="3" placeholder="Intervention details..."></textarea>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="interventionOutcome" class="form-label form-label-sm">Outcome</label>
+                                        <select class="form-select form-select-sm" id="interventionOutcome" name="outcome">
+                                            <option value="">Select outcome...</option>
+                                            <option value="In Progress">In Progress</option>
+                                            <option value="Completed">Completed</option>
+                                            <option value="Referral">Referral</option>
+                                            <option value="Follow-up Needed">Follow-up Needed</option>
+                                            <option value="Resolved">Resolved</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn btn-success btn-sm w-100">
+                                        <i class="fas fa-save me-1"></i>Save Intervention
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-lg-4">
                         <div class="card">
@@ -678,13 +945,15 @@ require_once '../includes/header.php';
                             </div>
                             <div class="card-body">
                                 <div class="d-grid gap-2">
-                                    <button class="btn btn-info btn-sm" onclick="updateStatus(<?php echo $viewReport['id']; ?>, 'under_review')">
-                                        <i class="fas fa-eye me-1"></i>Mark Under Review
+                                    <button class="btn btn-primary btn-sm" onclick="updateStatus(<?php echo $viewReport['id']; ?>, 'under_investigation')">
+                                        <i class="fas fa-search me-1"></i>Mark Under Investigation
                                     </button>
-                                    <button class="btn btn-success btn-sm" onclick="updateStatus(<?php echo $viewReport['id']; ?>, 'approved')">
-                                        <i class="fas fa-check me-1"></i>Approve
+                                    <button class="btn btn-dark btn-sm" onclick="updateStatus(<?php echo $viewReport['id']; ?>, 'referred_to_mswd')">
+                                        <i class="fas fa-share-square me-1"></i>Refer to MSWD
                                     </button>
-                                 
+                                    <button class="btn btn-success btn-sm" onclick="updateStatus(<?php echo $viewReport['id']; ?>, 'verified')">
+                                        <i class="fas fa-check-circle me-1"></i>Mark Verified
+                                    </button>
                                     <button class="btn btn-danger btn-sm" onclick="updateStatus(<?php echo $viewReport['id']; ?>, 'rejected')">
                                         <i class="fas fa-times me-1"></i>Reject
                                     </button>
@@ -874,10 +1143,10 @@ document.addEventListener('DOMContentLoaded', function() {
     font-weight: 500;
 }
 .status-submitted { background-color: #EBF8FF; color: #1e38afff; }
-.status-under_review { background-color: #FEF3C7; color: #B45309; }
-.status-approved { background-color: #D1FAE5; color: #047857; }
 .status-rejected { background-color: #FEE2E2; color: #B91C1C; }
-.status-revision_required { background-color: #EDE9FE; color: #6B21A8; }
+.status-under_investigation { background-color: #E6F7FF; color: #065f9f; }
+.status-referred_to_mswd { background-color: #F3F4F6; color: #111827; }
+.status-verified { background-color: #D1FAE5; color: #065f46; }
 
 .form-check-input:indeterminate {
     background-color: #6c757d;

@@ -11,6 +11,7 @@ $is_landing_page = basename($_SERVER['PHP_SELF']) == 'index.php';
     <meta name="theme-color" content="#0F172A" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <title><?php echo isset($pageTitle) ? $pageTitle . ' - ' . APP_NAME : APP_NAME; ?></title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <script>
         (function() {
             const isDarkMode = localStorage.getItem('darkMode') === 'true';
@@ -39,6 +40,12 @@ $is_landing_page = basename($_SERVER['PHP_SELF']) == 'index.php';
     ?>
     <link href="<?php echo BASE_URL; ?>/assets/css/dark-mode.css" rel="stylesheet">
     <?php endif; ?>
+    <style>
+        /* Hide Jotform branding from chatbot */
+        div.bg-navy-25 {
+            display: none !important;
+        }
+    </style>
 </head>
 <body <?php if (!$is_landing_page) echo ''; ?>>
     <!-- Dark Mode Script -->
@@ -140,7 +147,7 @@ $is_landing_page = basename($_SERVER['PHP_SELF']) == 'index.php';
                     <aside class="app-sidebar" id="app-sidebar">
                         <div class="brand">
                             <div class="logo">
-                                <i class="fas fa-graduation-cap"></i>
+                                <i class="fas fa-shield-alt"></i>
                             </div>
                             <div>
                                 <h4>SafeSpeak</h4>
@@ -156,17 +163,24 @@ $is_landing_page = basename($_SERVER['PHP_SELF']) == 'index.php';
                         <a href="<?php echo $baseUrl; ?>/student/dashboard.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='dashboard.php')? 'active':''; ?>"><i class="fa fa-tachometer-alt"></i> Dashboard</a>
                         <a href="<?php echo $baseUrl; ?>/student/submit_report.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='submit_report.php')? 'active':''; ?>"><i class="fa fa-plus"></i> Submit Report</a>
                         <a href="<?php echo $baseUrl; ?>/student/my_reports.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='my_reports.php')? 'active':''; ?>"><i class="fa fa-file-alt"></i> My Reports</a>
+                        <a href="<?php echo $baseUrl; ?>/interventions.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='interventions.php')? 'active':''; ?>"><i class="fas fa-notes-medical"></i> Interventions</a>
+                        <a href="<?php echo $baseUrl; ?>/info_center.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='info_center.php')? 'active':''; ?>"><i class="fas fa-book"></i> Info Center</a>
                     <?php elseif ($role === 'school'): ?>
                         <a href="<?php echo $baseUrl; ?>/school/dashboard.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='dashboard.php')? 'active':''; ?>"><i class="fa fa-tachometer-alt"></i> Dashboard</a>
                         <a href="<?php echo $baseUrl; ?>/school/students.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='students.php')? 'active':''; ?>"><i class="fa fa-users"></i> Students</a>
                         <a href="<?php echo $baseUrl; ?>/school/view_reports.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='view_reports.php')? 'active':''; ?>"><i class="fa fa-file-alt"></i> Reports</a>
                         <a href="<?php echo $baseUrl; ?>/school/analytics.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='analytics.php')? 'active':''; ?>"><i class="fa fa-chart-bar"></i> Analytics</a>
+                        <a href="<?php echo $baseUrl; ?>/interventions.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='interventions.php')? 'active':''; ?>"><i class="fas fa-notes-medical"></i> Interventions</a>
+                        <a href="<?php echo $baseUrl; ?>/info_center.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='info_center.php')? 'active':''; ?>"><i class="fas fa-book"></i> Info Center</a>
                     <?php elseif ($role === 'admin'): ?>
                         <a href="<?php echo $baseUrl; ?>/admin/dashboard.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='dashboard.php')? 'active':''; ?>"><i class="fa fa-tachometer-alt"></i> Dashboard</a>
                         <a href="<?php echo $baseUrl; ?>/admin/all_reports.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='all_reports.php')? 'active':''; ?>"><i class="fa fa-file-alt"></i> All Reports</a>
                         <a href="<?php echo $baseUrl; ?>/admin/manage_schools.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='manage_schools.php')? 'active':''; ?>"><i class="fa fa-school"></i> Schools</a>
                         <a href="<?php echo $baseUrl; ?>/admin/manage_users.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='manage_users.php')? 'active':''; ?>"><i class="fa fa-users"></i> Users</a>
                         <a href="<?php echo $baseUrl; ?>/admin/analytics.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='analytics.php')? 'active':''; ?>"><i class="fa fa-chart-bar"></i> Analytics</a>
+                        <a href="<?php echo $baseUrl; ?>/interventions.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='interventions.php')? 'active':''; ?>"><i class="fas fa-notes-medical"></i> Interventions</a>
+                        <a href="<?php echo $baseUrl; ?>/admin/mswd.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='mswd.php')? 'active':''; ?>"><i class="fas fa-hands-helping"></i> MSWD Cases</a>
+                        <a href="<?php echo $baseUrl; ?>/info_center.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='info_center.php')? 'active':''; ?>"><i class="fas fa-book"></i> Info Center</a>
                         <a href="<?php echo $baseUrl; ?>/admin/system_logs.php" class="<?php echo (basename($_SERVER['PHP_SELF'])=='system_logs.php')? 'active':''; ?>"><i class="fas fa-clipboard-list"></i> System Logs</a>
                     <?php endif; ?>
                         </nav>

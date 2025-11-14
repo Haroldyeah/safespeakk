@@ -45,7 +45,11 @@ $totalReports = $db->fetchOne(
 
 // Get reports
 $reports = $db->fetchAll(
-    "SELECT r.*, s.name as school_name 
+    "SELECT r.*, s.name as school_name,
+        (SELECT COUNT(*) FROM report_evidence re WHERE re.report_id = r.id) as evidence_count,
+        (SELECT file_name FROM report_evidence re WHERE re.report_id = r.id ORDER BY id ASC LIMIT 1) as evidence_sample_name,
+        (SELECT file_path FROM report_evidence re WHERE re.report_id = r.id ORDER BY id ASC LIMIT 1) as evidence_sample_path,
+        (SELECT file_size FROM report_evidence re WHERE re.report_id = r.id ORDER BY id ASC LIMIT 1) as evidence_sample_size
      FROM reports r 
      JOIN schools s ON r.school_id = s.id 
      WHERE $whereClause 
@@ -111,8 +115,9 @@ function getWebPath($filePath) {
                 <select class="form-select" name="status">
                     <option value="">All Statuses</option>
                     <option value="submitted" <?php echo $statusFilter === 'submitted' ? 'selected' : ''; ?>>Submitted</option>
-                    <option value="under_review" <?php echo $statusFilter === 'under_review' ? 'selected' : ''; ?>>Under Review</option>
-                    <option value="approved" <?php echo $statusFilter === 'approved' ? 'selected' : ''; ?>>Approved</option>
+                    <option value="under_investigation" <?php echo $statusFilter === 'under_investigation' ? 'selected' : ''; ?>>Under Investigation</option>
+                    <option value="referred_to_mswd" <?php echo $statusFilter === 'referred_to_mswd' ? 'selected' : ''; ?>>Referred to MSWD</option>
+                    <option value="verified" <?php echo $statusFilter === 'verified' ? 'selected' : ''; ?>>Verified</option>
                     <option value="rejected" <?php echo $statusFilter === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
                 </select>
             </div>
@@ -187,6 +192,7 @@ function getWebPath($filePath) {
                             <th>Type of Bullying</th>
                             <th>Description</th>
                             <th>School</th>
+                            <th>Severity</th>
                             <th>Status</th>
                             <th>Date of Incident</th>
                             <th>Submitted</th>
@@ -210,12 +216,43 @@ function getWebPath($filePath) {
                                     </span>
                                 </td>
                                 <td>
+                                    <?php
+                                    $severityLabel = $report['severity'] ?? '';
+                                    if (empty($severityLabel)) {
+                                        try {
+                                            $evidenceInfo = [
+                                                'count' => (int)($report['evidence_count'] ?? 0),
+                                                'samples' => []
+                                            ];
+                                            if (!empty($report['evidence_sample_name']) || !empty($report['evidence_sample_path'])) {
+                                                $evidenceInfo['samples'][] = [
+                                                    'file_name' => $report['evidence_sample_name'] ?? '',
+                                                    'file_path' => $report['evidence_sample_path'] ?? '',
+                                                    'file_size' => $report['evidence_sample_size'] ?? 0
+                                                ];
+                                            }
+                                            $analysis = analyze_report($report, $evidenceInfo);
+                                            $severityLabel = $analysis['severity'] ?? '';
+                                        } catch (Throwable $t) {
+                                            $severityLabel = '';
+                                        }
+                                    }
+                                    if (!empty($severityLabel)) {
+                                        $badgeClass = getSeverityBadgeClass($severityLabel);
+                                        echo '<span class="badge ' . $badgeClass . '">' . htmlspecialchars(ucfirst($severityLabel)) . '</span>';
+                                    } else {
+                                        echo '<span class="text-muted">N/A</span>';
+                                    }
+                                    ?>
+                                </td>
+                                <td>
                                     <span class="status-badge status-<?php echo $report['status']; ?>">
                                         <?php 
                                         $statusDisplay = [
                                             'submitted' => 'Submitted',
-                                            'under_review' => 'Under Review',
-                                            'approved' => 'Approved',
+                                            'under_investigation' => 'Under Investigation',
+                                            'referred_to_mswd' => 'Referred to MSWD',
+                                            'verified' => 'Verified',
                                             'rejected' => 'Rejected'
                                         ];
                                         echo $statusDisplay[$report['status']] ?? $report['status'];

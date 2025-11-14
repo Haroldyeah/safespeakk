@@ -5,12 +5,12 @@ requireRole('admin');
 
 // Get system-wide statistics
 $stats = [
-    'total_reports' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE deleted_at IS NULL")['count'],
+    'total_reports' => $db->fetchOne("SELECT COUNT(*) as count FROM reports")['count'],
     'total_schools' => $db->fetchOne("SELECT COUNT(*) as count FROM schools WHERE status = 'active'")['count'],
     'total_students' => $db->fetchOne("SELECT COUNT(*) as count FROM users WHERE role = 'student' AND status = 'active'")['count'],
-    'pending_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'submitted' AND deleted_at IS NULL")['count'],
-    'under_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'under_review' AND deleted_at IS NULL")['count'],
-    'approved' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'approved' AND deleted_at IS NULL")['count']
+    'pending_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'submitted'")['count'],
+    'under_investigation' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'under_investigation'")['count'],
+    'verified' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'verified'")['count']
 ];
 
 // Get recent activity
@@ -19,7 +19,6 @@ $recentReports = $db->fetchAll(
      FROM reports r 
      JOIN users u ON r.student_id = u.id 
      JOIN schools s ON r.school_id = s.id 
-     WHERE r.deleted_at IS NULL 
      ORDER BY r.submission_date DESC 
      LIMIT 5",
     []
@@ -27,10 +26,9 @@ $recentReports = $db->fetchAll(
 
 // Get school statistics
 $schoolStats = $db->fetchAll(
-    "SELECT s.name, s.id, 
-            COUNT(CASE WHEN r.deleted_at IS NULL THEN r.id END) as report_count,
-            SUM(CASE WHEN r.status = 'approved' AND r.deleted_at IS NULL THEN 1 ELSE 0 END) as approved_count,
-            SUM(CASE WHEN r.status = 'submitted' AND r.deleted_at IS NULL THEN 1 ELSE 0 END) as pending_count
+    "SELECT s.name, s.id, COUNT(r.id) as report_count,
+            SUM(CASE WHEN r.status = 'verified' THEN 1 ELSE 0 END) as verified_count,
+            SUM(CASE WHEN r.status = 'submitted' THEN 1 ELSE 0 END) as pending_count
      FROM schools s 
      LEFT JOIN reports r ON s.id = r.school_id 
      WHERE s.status = 'active'
@@ -46,7 +44,7 @@ $monthlyStats = $db->fetchAll(
         DATE_FORMAT(submission_date, '%Y-%m') as month,
         COUNT(*) as total_reports
      FROM reports 
-     WHERE submission_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH) AND deleted_at IS NULL
+     WHERE submission_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
      GROUP BY DATE_FORMAT(submission_date, '%Y-%m')
      ORDER BY month DESC 
      LIMIT 12",
@@ -146,6 +144,12 @@ require_once '../includes/header.php';
                                         <i class="fas fa-school me-1"></i>
                                         <?php echo htmlspecialchars($report['school_name']); ?>
                                     </p>
+                                    <?php if (!empty($report['bully_name'])): ?>
+                                        <p class="mb-1 text-muted small">
+                                            <i class="fas fa-user-friends me-1"></i>
+                                            <?php echo htmlspecialchars($report['bully_name']); ?>
+                                        </p>
+                                    <?php endif; ?>
                                     <small class="text-muted">
                                         <i class="fas fa-calendar me-1"></i>
                                         <?php echo formatDate($report['submission_date']); ?>
@@ -182,8 +186,8 @@ require_once '../includes/header.php';
                 <?php
                 $total = $stats['total_reports'] > 0 ? $stats['total_reports'] : 1;
                 $pending_percent = ($stats['pending_review'] / $total) * 100;
-                $review_percent = ($stats['under_review'] / $total) * 100;
-                $approved_percent = ($stats['approved'] / $total) * 100;
+                $investigation_percent = ($stats['under_investigation'] / $total) * 100;
+                $verified_percent = ($stats['verified'] / $total) * 100;
                 ?>
                 <!-- Status distribution progress bars -->
                 <div class="mb-3">
@@ -198,21 +202,21 @@ require_once '../includes/header.php';
 
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <small class="text-info">Under Review</small>
-                        <small class="text-muted"><?php echo $stats['under_review']; ?> reports</small>
+                        <small class="text-info">Under Investigation</small>
+                        <small class="text-muted"><?php echo $stats['under_investigation']; ?> reports</small>
                     </div>
                     <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-info" style="width: <?php echo $review_percent; ?>%"></div>
+                        <div class="progress-bar bg-info" style="width: <?php echo $investigation_percent; ?>%"></div>
                     </div>
                 </div>
 
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <small class="text-success">Approved</small>
-                        <small class="text-muted"><?php echo $stats['approved']; ?> reports</small>
+                        <small class="text-success">Verified</small>
+                        <small class="text-muted"><?php echo $stats['verified']; ?> reports</small>
                     </div>
                     <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-success" style="width: <?php echo $approved_percent; ?>%"></div>
+                        <div class="progress-bar bg-success" style="width: <?php echo $verified_percent; ?>%"></div>
                     </div>
                 </div>
 
@@ -241,10 +245,10 @@ require_once '../includes/header.php';
                             </div>
                             <div class="progress mb-1" style="height: 6px;">
                                 <div class="progress-bar bg-success" 
-                                     style="width: <?php echo $school['report_count'] > 0 ? ($school['approved_count'] / $school['report_count']) * 100 : 0; ?>%"></div>
+                                     style="width: <?php echo $school['report_count'] > 0 ? ($school['verified_count'] / $school['report_count']) * 100 : 0; ?>%"></div>
                             </div>
                             <small class="text-muted">
-                                <?php echo $school['approved_count']; ?> approved, <?php echo $school['pending_count']; ?> pending
+                                <?php echo $school['verified_count']; ?> verified, <?php echo $school['pending_count']; ?> pending
                             </small>
                         </div>
                     <?php endforeach; ?>
@@ -263,13 +267,13 @@ require_once '../includes/header.php';
                 <div class="row text-center">
                     <div class="col-6">
                         <div class="border-end">
-                            <h4 class="text-success mb-1"><?php echo $stats['approved']; ?></h4>
-                            <small class="text-muted">Approved</small>
+                            <h4 class="text-success mb-1"><?php echo $stats['verified']; ?></h4>
+                            <small class="text-muted">Verified</small>
                         </div>
                     </div>
                     <div class="col-6">
-                        <h4 class="text-info mb-1"><?php echo $stats['under_review']; ?></h4>
-                        <small class="text-muted">In Review</small>
+                        <h4 class="text-info mb-1"><?php echo $stats['under_investigation']; ?></h4>
+                        <small class="text-muted">Under Investigation</small>
                     </div>
                 </div>
                 

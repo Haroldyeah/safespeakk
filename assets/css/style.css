@@ -1028,6 +1028,24 @@ footer {
 .status-approved { background-color: #D1FAE5; color: #047857; }
 .status-rejected { background-color: #FEE2E2; color: #B91C1C; }
 .status-revision_required { background-color: #EDE9FE; color: #6B21A8; }
+.status-under_investigation { background-color: #E6F7FF; color: #065f9f; }
+.status-referred_to_mswd { background-color: #F3F4F6; color: #111827; }
+.status-verified { background-color: #D1FAE5; color: #065f46; }
+.status-closed { background-color: #F3F4F6; color: #4B5563; }
+
+/* Severity badges */
+.severity-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+.severity-low { background-color: #ECFCCB; color: #365314; }        /* pale green */
+.severity-medium { background-color: #FEF3C7; color: #854d0e; }     /* amber */
+.severity-high { background-color: #FEE2E2; color: #991b1b; }       /* red-ish */
+.severity-critical { background-color: #F8D7DA; color: #6b0216; font-weight:700; } /* stronger */
 
 .navbar-toggler-icon {
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(55, 65, 81, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");

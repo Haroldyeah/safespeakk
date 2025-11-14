@@ -27,8 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
     
-        // Valid status transitions
-        $validStatuses = ['submitted', 'under_review', 'approved', 'rejected'];
+    // Valid status transitions for school users (admin-only statuses like 'verified' and 'approved' are not included)
+    $validStatuses = ['submitted', 'under_investigation', 'referred_to_mswd', 'verified', 'rejected'];
         if (!in_array($newStatus, $validStatuses)) {
             echo json_encode(['success' => false, 'message' => 'Invalid status']);
             exit;
@@ -102,6 +102,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
+}
+
+// Handle form POST from the school UI to add interventions (non-AJAX)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_intervention') {
+    $reportIdPost = (int)($_POST['report_id'] ?? 0);
+    $sessionDate = $_POST['session_date'] ?? null;
+    $counselor = trim($_POST['counselor_name'] ?? '');
+    $notes = trim($_POST['notes'] ?? '');
+    $outcome = trim($_POST['outcome'] ?? '');
+
+    if (!$reportIdPost || !$sessionDate) {
+        $_SESSION['flash_message'] = 'Report and session date are required.';
+        $_SESSION['flash_type'] = 'error';
+        header('Location: manage_report.php?id=' . $reportId);
+        exit;
+    }
+
+    try {
+        $insertData = [
+            'report_id' => $reportIdPost,
+            'added_by_user_id' => $_SESSION['school_id'] ?? null,
+            'added_by_type' => 'school',
+            'session_date' => $sessionDate,
+            'counselor_name' => $counselor,
+            'notes' => $notes,
+            'outcome' => $outcome
+        ];
+        $db->insert('interventions', $insertData);
+
+        // Notify student and school contact
+        $reportDetails = $db->fetchOne(
+            "SELECT r.*, u.first_name, u.last_name, u.email, s.from_email, s.from_name FROM reports r JOIN users u ON r.student_id = u.id JOIN schools s ON r.school_id = s.id WHERE r.id = ?",
+            [$reportIdPost]
+        );
+
+        if ($reportDetails && !empty($reportDetails['email'])) {
+            require_once __DIR__ . '/../templates/email/load_template.php';
+            $subject = 'Intervention Recorded for Report #' . $reportIdPost;
+            $body = "<p>Dear " . htmlspecialchars($reportDetails['first_name']) . ",</p>";
+            $body .= "<p>An intervention/counseling session has been recorded for the report you are involved in (Report ID #$reportIdPost). Session date: " . htmlspecialchars($sessionDate) . "</p>";
+            if ($outcome) $body .= "<p>Outcome: " . nl2br(htmlspecialchars($outcome)) . "</p>";
+            try {
+                sendMail($reportDetails['email'], $subject, $body, $reportDetails['from_email'] ?? null, $reportDetails['from_name'] ?? APP_NAME);
+            } catch (Exception $e) {
+                error_log('Intervention mail error: ' . $e->getMessage());
+            }
+        }
+
+        $_SESSION['flash_message'] = 'Intervention recorded successfully.';
+        $_SESSION['flash_type'] = 'success';
+        header('Location: manage_report.php?id=' . $reportId);
+        exit;
+    } catch (Throwable $t) {
+        error_log('Failed to add intervention (school): ' . $t->getMessage());
+        $_SESSION['flash_message'] = 'Failed to record intervention.';
+        $_SESSION['flash_type'] = 'error';
+        header('Location: manage_report.php?id=' . $reportId);
+        exit;
+    }
 }
 
 // Get report details
@@ -195,6 +254,13 @@ require_once '../includes/header.php';
                     </div>
                 </div>
                 
+                <?php if (!empty($report['bully_name'])): ?>
+                <div class="row mb-3">
+                    <div class="col-sm-3 fw-bold">Involved / Bully:</div>
+                    <div class="col-sm-9"><?php echo htmlspecialchars($report['bully_name']); ?></div>
+                </div>
+                <?php endif; ?>
+                
                 <?php if ($report['date_of_incident']): ?>
                 <div class="row mb-3">
                     <div class="col-sm-3 fw-bold">Date of Incident:</div>
@@ -234,6 +300,8 @@ require_once '../includes/header.php';
                 <?php 
                 // Get evidence files from report_evidence table
                 $evidence = $db->fetchAll("SELECT * FROM report_evidence WHERE report_id = ?", [$reportId]);
+                // Get interventions for this report
+                $interventions = $db->fetchAll("SELECT * FROM interventions WHERE report_id = ? ORDER BY session_date DESC", [$reportId]);
                 if (!empty($evidence)): ?>
                 <div id="evidence" class="row mb-3">
                     <div class="col-sm-3 fw-bold">Evidence Files:</div>
@@ -305,6 +373,21 @@ require_once '../includes/header.php';
                 </div>
                 <?php endif; ?>
                 
+                <?php if (!empty($interventions)): ?>
+                <div class="row mb-3">
+                    <div class="col-sm-3 fw-bold">Interventions:</div>
+                    <div class="col-sm-9">
+                        <?php foreach ($interventions as $iv): ?>
+                            <div class="mb-2 border rounded p-2">
+                                <div><strong><?php echo htmlspecialchars($iv['counselor_name'] ?: 'Counselor'); ?></strong> — <small class="text-muted"><?php echo htmlspecialchars($iv['session_date']); ?></small></div>
+                                <?php if (!empty($iv['outcome'])): ?><div><em>Outcome:</em> <?php echo htmlspecialchars($iv['outcome']); ?></div><?php endif; ?>
+                                <?php if (!empty($iv['notes'])): ?><div class="mt-1 small text-muted"><?php echo nl2br(htmlspecialchars($iv['notes'])); ?></div><?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
                 <?php if ($report['school_comments']): ?>
                 <div class="row mb-3">
                     <div class="col-sm-3 fw-bold">School Comments:</div>
@@ -316,6 +399,33 @@ require_once '../includes/header.php';
                 </div>
                 <?php endif; ?>
                 
+                <?php
+                // Recommended actions and severity (use stored or analyze on the fly)
+                $recommendedActions = $report['recommended_actions'] ?? '';
+                $severityLabel = $report['severity'] ?? '';
+                if (empty($recommendedActions) || empty($severityLabel)) {
+                    try {
+                        $analysis = analyze_report($report, !empty($evidence) ? count($evidence) : 0);
+                        if (empty($recommendedActions) && !empty($analysis['suggested_actions'])) $recommendedActions = $analysis['suggested_actions'];
+                        if (empty($severityLabel) && !empty($analysis['severity'])) $severityLabel = $analysis['severity'];
+                    } catch (Throwable $t) {
+                        // ignore
+                    }
+                }
+                ?>
+
+                <div class="row mb-3">
+                    <div class="col-sm-3 fw-bold">Suggested Actions:</div>
+                    <div class="col-sm-9">
+                        <?php if (!empty($severityLabel)):
+                            $sevClass = 'severity-' . strtolower($severityLabel);
+                        ?>
+                            <div class="mb-2"><strong>Severity:</strong> <span class="badge <?php echo htmlspecialchars($sevClass); ?> text-white"><?php echo htmlspecialchars(ucfirst($severityLabel)); ?></span></div>
+                        <?php endif; ?>
+                        <div><?php echo nl2br(htmlspecialchars($recommendedActions ?: 'No recommended actions available.')); ?></div>
+                    </div>
+                </div>
+
                 <?php if ($report['admin_comments']): ?>
                 <div class="row mb-0">
                     <div class="col-sm-3 fw-bold">Admin Comments:</div>
@@ -347,8 +457,9 @@ require_once '../includes/header.php';
                         <label for="status" class="form-label">Update Status</label>
                         <select class="form-select" id="status" name="status">
                             <option value="submitted" <?php echo $report['status'] === 'submitted' ? 'selected' : ''; ?>>Submitted</option>
-                            <option value="under_review" <?php echo $report['status'] === 'under_review' ? 'selected' : ''; ?>>Under Review</option>
-                            <option value="approved" <?php echo $report['status'] === 'approved' ? 'selected' : ''; ?>>Approved</option>
+                            <option value="under_investigation" <?php echo $report['status'] === 'under_investigation' ? 'selected' : ''; ?>>Under Investigation</option>
+                            <option value="referred_to_mswd" <?php echo $report['status'] === 'referred_to_mswd' ? 'selected' : ''; ?>>Referred to MSWD</option>
+                            <option value="verified" <?php echo $report['status'] === 'verified' ? 'selected' : ''; ?>>Verified</option>
                             <option value="rejected" <?php echo $report['status'] === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
                         </select>
                     </div>
@@ -368,37 +479,39 @@ require_once '../includes/header.php';
             </div>
         </div>
         
-        <!-- Quick Actions -->
+
+
+        <!-- Interventions (School can add) -->
         <div class="card mb-4">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                    <i class="fas fa-notes-medical me-2"></i>Interventions
                 </h6>
             </div>
             <div class="card-body">
-                <div class="d-grid gap-2">
-                    <?php if ($report['status'] === 'submitted'): ?>
-                        <button class="btn btn-success btn-sm" onclick="quickUpdateStatus('under_review')">
-                            <i class="fas fa-play me-1"></i>Start Review
-                        </button>
-                    <?php elseif ($report['status'] === 'under_review'): ?>
-                        <button class="btn btn-success btn-sm" onclick="quickUpdateStatus('approved')">
-                            <i class="fas fa-check me-1"></i>Approve
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="quickUpdateStatus('rejected')">
-                            <i class="fas fa-times me-1"></i>Reject
-                        </button>
-                    <?php endif; ?>
-                    
-                    <?php 
-                    // Check if there are any evidence files for this report
-                    $hasEvidence = $db->fetchOne("SELECT COUNT(*) FROM report_evidence WHERE report_id = ?", [$reportId]);
-                    if ($hasEvidence > 0): ?>
-                        <a href="../student/download_report.php?id=<?php echo $report['id']; ?>" class="btn btn-outline-primary btn-sm">
-                            <i class="fas fa-download me-1"></i>Download All Files
-                        </a>
-                    <?php endif; ?>
-                </div>
+                <form method="POST">
+                    <input type="hidden" name="action" value="add_intervention">
+                    <input type="hidden" name="report_id" value="<?php echo $report['id']; ?>">
+                    <div class="mb-2">
+                        <label class="form-label">Session Date</label>
+                        <input type="date" name="session_date" class="form-control" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Counselor</label>
+                        <input type="text" name="counselor_name" class="form-control" placeholder="Counselor name">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Outcome</label>
+                        <input type="text" name="outcome" class="form-control" placeholder="Outcome">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" rows="3" class="form-control" placeholder="Notes / session summary"></textarea>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus me-1"></i>Add Intervention</button>
+                    </div>
+                </form>
             </div>
         </div>
         
@@ -410,10 +523,12 @@ require_once '../includes/header.php';
                 </h6>
             </div>
             <div class="card-body">
+                <?php $evidenceCount = !empty($evidence) ? count($evidence) : 0; ?>
                 <small class="text-muted">
                     <strong>Report ID:</strong> #<?php echo $report['id']; ?><br>
                     <strong>Submitted to:</strong> <?php echo htmlspecialchars($report['report_school_name']); ?><br>
                     <strong>File Size:</strong> <?php echo !empty($report['file_size']) ? formatFileSize($report['file_size']) : 'N/A'; ?><br>
+                    <strong>Evidence Count:</strong> <?php echo $evidenceCount; ?><br>
                     <strong>Submitted:</strong> <?php echo formatDate($report['submission_date']); ?>
                 </small>
             </div>
@@ -465,38 +580,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-function quickUpdateStatus(newStatus) {
-    const confirmMessage = `Are you sure you want to ${newStatus.replace('_', ' ')} this report?`;
-    
-    if (confirm(confirmMessage)) {
-        const formData = {
-            action: 'update_status',
-            report_id: parseInt(document.getElementById('reportId').value),
-            status: newStatus
-        };
-        
-        fetch('manage_report.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showAlert('Report status updated successfully!', 'success');
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                showAlert(data.message || 'Failed to update status', 'danger');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showAlert('An error occurred while updating status', 'danger');
-        });
-    }
-}
+
 </script>
 
 <?php require_once '../includes/footer.php'; ?>

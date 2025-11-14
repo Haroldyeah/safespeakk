@@ -37,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_FILES) && $_SERVER['CONTENT
             $reportData = [
                 'title' => $title,
                 'description' => $description,
+                'bully_name' => sanitizeInput($_POST['bully_name'] ?? ''),
                 'date_of_incident' => $dateOfIncident,
                 'student_id' => $studentId,
                 'school_id' => $selectedSchoolId,
@@ -86,6 +87,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_FILES) && $_SERVER['CONTENT
                 }
 
                 if ($allFilesUploaded) {
+                    // Run analyzer to determine severity and suggested actions
+                    try {
+                        $analysis = analyze_report([
+                            'title' => $title,
+                            'description' => $description,
+                            'date_of_incident' => $dateOfIncident,
+                            'student_id' => $studentId,
+                            'school_id' => $selectedSchoolId
+                        ], count($uploadedFilePaths));
+
+                        $updateData = [];
+                        if (!empty($analysis['severity'])) {
+                            $updateData['severity'] = $analysis['severity'];
+                        }
+                        if (!empty($analysis['suggested_actions'])) {
+                            $updateData['recommended_actions'] = $analysis['suggested_actions'];
+                        }
+
+                        if (!empty($updateData)) {
+                            // Try to persist analysis result; wrap in try/catch in case DB schema doesn't have these columns yet
+                            try {
+                                $db->update('reports', $updateData, 'id = ?', [$reportId]);
+                            } catch (Exception $e) {
+                                // ignore - migration may not have been run
+                            }
+                        }
+                    } catch (Throwable $t) {
+                        // Analyzer should not break submission; ignore errors quietly
+                    }
                     // Send email to school after successful report submission
                     require_once __DIR__ . '/../config/mail.php';
                     require_once __DIR__ . '/../templates/email/load_template.php';
@@ -167,6 +197,14 @@ require_once '../includes/header.php';
                             <option value="Other" <?php echo (isset($title) && $title == 'Other') ? 'selected' : ''; ?>>Other</option>
                         </select>
                         <div class="invalid-feedback">Please select the type of bullying.</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="bully_name" class="form-label small fw-semibold">Name of Student(s) Involved</label>
+                        <input type="text" class="form-control" id="bully_name" name="bully_name" 
+                               placeholder="Enter the name(s) of the student(s) involved..."
+                               value="<?php echo htmlspecialchars($bully_name ?? ''); ?>">
+                        <div class="form-text text-muted">This information will be kept confidential and helps in addressing the situation appropriately.</div>
                     </div>
 
                     <div class="mb-4">

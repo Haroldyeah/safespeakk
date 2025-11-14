@@ -17,7 +17,7 @@ $totalLogs = $db->fetchOne("SELECT COUNT(*) as count FROM system_logs")['count']
 $systemLogs = $db->fetchAll(
     "SELECT sl.*, u.first_name, u.last_name, s.name as school_name
      FROM system_logs sl
-     LEFT JOIN users u ON sl.user_id = u.id AND sl.user_type = 'admin' OR sl.user_type = 'student'
+     LEFT JOIN users u ON sl.user_id = u.id AND (sl.user_type = 'admin' OR sl.user_type = 'student')
      LEFT JOIN schools s ON sl.user_id = s.id AND sl.user_type = 'school'
      ORDER BY sl.created_at DESC
      LIMIT ? OFFSET ?",

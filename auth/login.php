@@ -36,13 +36,26 @@ if ($_POST) {
             );
             
             if ($school && verifyPassword($password, $school['password'])) {
-                $_SESSION['school_id'] = $school['id'];
-                $_SESSION['school_name'] = $school['name'];
-                $_SESSION['school_code'] = $school['code'];
+                // Generate OTP
+                $otp = rand(100000, 999999);
+                $_SESSION['otp_code'] = $otp;
+                $_SESSION['otp_expiry'] = time() + (5 * 60); // OTP valid for 5 minutes
+
+                // Store temporary MFA data
+                $_SESSION['mfa_id'] = $school['id'];
+                $_SESSION['mfa_type'] = 'school';
+                $_SESSION['mfa_email'] = $school['email'];
+                $_SESSION['mfa_redirect_url'] = '../school/dashboard.php'; // Intended final redirect
+
+                // Send OTP email
+                require_once __DIR__ . '/../config/mail.php'; // Ensure mail.php is included
+                $subject = "Your One-Time Password (OTP) for SafeSpeak";
+                $body = "<p>Hello,</p><p>Your One-Time Password (OTP) for SafeSpeak login is: <strong>{$otp}</strong></p><p>This OTP is valid for 5 minutes. Please enter it on the verification page to complete your login.</p><p>If you did not attempt to log in, please ignore this email.</p>";
+                sendMail($school['email'], $subject, $body);
+
+                logActivity($db, $school['id'], 'school', 'otp_sent', 'OTP sent for school login');
                 
-                logActivity($db, $school['id'], 'school', 'login', 'School login successful');
-                
-                redirect('../school/dashboard.php', 'Welcome back!', 'success');
+                redirect('verify_otp.php', 'Please check your email for the OTP.', 'info');
             } else {
                 $error = 'Invalid school credentials.';
             }
@@ -54,27 +67,36 @@ if ($_POST) {
             );
             
             if ($user && verifyPassword($password, $user['password'])) {
-                // Check if login type matches user role
-                if (($loginType === 'admin' && $user['role'] !== 'admin') ||
-                    ($loginType === 'student' && $user['role'] !== 'student')) {
-                    $error = 'Invalid credentials for this login type.';
+                if ($user['is_verified'] == 0) {
+                    $error = 'Your account is not verified. Please check your email for the verification link.';
+                    // Optionally, add a resend verification email link here.
                 } else {
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['username'] = $user['username'];
-                    $_SESSION['first_name'] = $user['first_name'];
-                    $_SESSION['last_name'] = $user['last_name'];
-                    $_SESSION['role'] = $user['role'];
-                    $_SESSION['school_id'] = $user['school_id'];
-                    // ensure email and id photo are in session for header/profile display
-                    $_SESSION['email'] = $user['email'] ?? '';
-                    // DB stores full path in `id_photo_path` (e.g. 'uploads/id_photos/xxx.jpg')
-                    $photoVal = $user['id_photo_path'] ?? $user['id_photo'] ?? '';
-                    $_SESSION['id_photo'] = $photoVal ? basename($photoVal) : '';
-                    
-                    logActivity($db, $user['id'], $user['role'], 'login', 'User login successful');
-                    
-                    $redirectUrl = $user['role'] === 'admin' ? '../admin/dashboard.php' : '../student/dashboard.php';
-                    redirect($redirectUrl, 'Welcome back, ' . $user['first_name'] . '!', 'success');
+                    // Check if login type matches user role
+                    if (($loginType === 'admin' && $user['role'] !== 'admin') ||
+                        ($loginType === 'student' && $user['role'] !== 'student'))  {
+                        $error = 'Invalid credentials for this login type.';
+                    } else {
+                        // Generate OTP
+                        $otp = rand(100000, 999999);
+                        $_SESSION['otp_code'] = $otp;
+                        $_SESSION['otp_expiry'] = time() + (5 * 60); // OTP valid for 5 minutes
+
+                        // Store temporary MFA data
+                        $_SESSION['mfa_id'] = $user['id'];
+                        $_SESSION['mfa_type'] = $user['role'];
+                        $_SESSION['mfa_email'] = $user['email'];
+                        $_SESSION['mfa_redirect_url'] = ($user['role'] === 'admin' ? '../admin/dashboard.php' : '../student/dashboard.php'); // Intended final redirect
+
+                        // Send OTP email
+                        require_once __DIR__ . '/../config/mail.php'; // Ensure mail.php is included
+                        $subject = "Your One-Time Password (OTP) for SafeSpeak";
+                        $body = "<p>Hello,</p><p>Your One-Time Password (OTP) for SafeSpeak login is: <strong>{$otp}</strong></p><p>This OTP is valid for 5 minutes. Please enter it on the verification page to complete your login.</p><p>If you did not attempt to log in, please ignore this email.</p>";
+                        sendMail($user['email'], $subject, $body);
+
+                        logActivity($db, $user['id'], $user['role'], 'otp_sent', 'OTP sent for user login');
+                        
+                        redirect('verify_otp.php', 'Please check your email for the OTP.', 'info');
+                    }
                 }
             } else {
                 $error = 'Invalid credentials.';
@@ -119,24 +141,17 @@ require_once '../includes/header.php';
                     <?php endif; ?>
 
                     <form method="POST" class="needs-validation" novalidate>
-                        <div class="mb-3">
-                            <label for="username" class="form-label small fw-semibold">
-                                <?php echo $loginType === 'school' ? 'School Email or Code' : 'Username or Email'; ?>
-                            </label>
-                            <div class="input-group input-group-lg">
-                                <span class="input-group-text bg-white"><i class="fas fa-user text-muted"></i></span>
-                                <input type="text" class="form-control" id="username" name="username" value="<?php echo htmlspecialchars($username ?? ''); ?>" required>
-                            </div>
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="username" name="username" placeholder="Username" value="<?php echo htmlspecialchars($username ?? ''); ?>" required>
+                            <label for="username"><?php echo $loginType === 'school' ? 'School Email or Code' : 'Username or Email'; ?></label>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="password" class="form-label small fw-semibold">Password</label>
-                            <div class="input-group input-group-lg">
-                                <input type="password" class="form-control" id="password" name="password" required>
-                                <button class="btn btn-outline-secondary" type="button" id="togglePassword">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
+                        <div class="form-floating mb-3 position-relative">
+                            <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
+                            <label for="password">Password</label>
+                            <span class="position-absolute top-50 end-0 translate-middle-y pe-3 toggle-password" style="cursor: pointer;" data-target="#password">
+                                <i class="fas fa-eye"></i>
+                            </span>
                         </div>
 
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -160,7 +175,7 @@ require_once '../includes/header.php';
                         <?php if ($loginType === 'student'): ?>
                             <p class="mb-2 small">Don't have an account?</p>
                             <a href="register.php" class="btn btn-outline-primary btn-sm">
-                                <i class="fas fa-user-plus me-1"></i>Register Now
+                                 <i class="fas fa-user-plus me-1"></i>Register Now
                             </a>
                         <?php endif; ?>
                     </div>
@@ -169,7 +184,7 @@ require_once '../includes/header.php';
                         <div class="btn-group" role="group" aria-label="Login types">
                             <a href="login.php?type=student" class="btn btn-sm <?php echo $loginType === 'student' ? 'btn-primary' : 'btn-outline-secondary'; ?>">Student</a>
                             <a href="login.php?type=school" class="btn btn-sm <?php echo $loginType === 'school' ? 'btn-primary' : 'btn-outline-secondary'; ?>">School</a>
-                            <a href="login.php?type=admin" class="btn btn-sm <?php echo $loginType === 'admin' ? 'btn-primary' : 'btn-outline-secondary'; ?>">Admin</a>
+                            
                         </div>
                     </div>
 
@@ -183,18 +198,21 @@ require_once '../includes/header.php';
 </div>
 
 <script>
-// Password toggle
-document.getElementById('togglePassword').addEventListener('click', function() {
-    const password = document.getElementById('password');
-    const icon = this.querySelector('i');
-    if (password.type === 'password') {
-        password.type = 'text';
-        icon.classList.remove('fa-eye');
-        icon.classList.add('fa-eye-slash');
-    } else {
-        password.type = 'password';
-        icon.classList.remove('fa-eye-slash');
-        icon.classList.add('fa-eye');
-    }
+document.addEventListener('DOMContentLoaded', function () {
+    const passwordToggles = document.querySelectorAll('.toggle-password');
+
+    passwordToggles.forEach(toggle => {
+        toggle.addEventListener('click', function () {
+            const passwordField = document.querySelector(this.getAttribute('data-target'));
+            const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordField.setAttribute('type', type);
+            this.querySelector('i').classList.toggle('fa-eye-slash');
+            this.querySelector('i').classList.toggle('fa-eye');
+        });
+    });
 });
 </script>
+
+
+
+

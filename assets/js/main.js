@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize status updates
     initializeStatusUpdates();
+
+    
 });
 
 // File Upload Functionality
@@ -70,14 +72,12 @@ function updateFileDisplay(file) {
         return;
     }
 
-    fileUploadArea.innerHTML = `
-        <div class="file-selected">
-            <i class="fas fa-file-alt file-upload-icon text-success"></i>
-            <h6 class="mt-2 mb-1">${file.name}</h6>
-            <p class="text-muted mb-0">${formatFileSize(file.size)}</p>
-            <small class="text-success">File ready for upload</small>
-        </div>
-    `;
+    fileUploadArea.innerHTML = "    <div class=\"file-selected\">
+        <i class=\"fas fa-file-alt file-upload-icon text-success\"></i>
+        <h6 class=\"mt-2 mb-1\">" + file.name + "</h6>
+        <p class=\"text-muted mb-0\">" + formatFileSize(file.size) + "</p>
+        <small class=\"text-success\">File ready for upload</small>
+    </div>";
     showAlert('File selected successfully!', 'success');
 }
 
@@ -218,10 +218,8 @@ function showAlert(message, type = 'info') {
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
     alertDiv.setAttribute('role', 'alert');
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    `;
+    alertDiv.innerHTML = "    " +
+        message + "\n        <button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"alert\" aria-label=\"Close\"></button>";
     
     globalAlertContainer.appendChild(alertDiv);
     
@@ -348,3 +346,4 @@ document.addEventListener('keydown', function(e) {
         });
     }
 });
+

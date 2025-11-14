@@ -13,7 +13,9 @@ $offset = ($page - 1) * $perPage;
 // Get students for this school with report counts
 $students = $db->fetchAll(
     "SELECT u.id, u.first_name, u.last_name, u.email, u.student_id, u.id_photo_path, 
-            (SELECT COUNT(*) FROM reports r WHERE r.student_id = u.id) as report_count
+            (SELECT COUNT(*) FROM reports r WHERE r.student_id = u.id AND r.deleted_at IS NULL) as active_report_count,
+            (SELECT COUNT(*) FROM reports r WHERE r.student_id = u.id AND r.status = 'approved' AND r.deleted_at IS NULL) as approved_report_count,
+            (SELECT COUNT(*) FROM reports r WHERE r.student_id = u.id AND r.deleted_at IS NOT NULL) as deleted_report_count
      FROM users u
      WHERE u.school_id = ? AND u.role = 'student'
      ORDER BY u.last_name, u.first_name
@@ -75,7 +77,15 @@ require_once '../includes/header.php';
                                 </td>
                                 <td><?php echo htmlspecialchars($s['email']); ?></td>
                                 <td><?php echo htmlspecialchars($s['student_id']); ?></td>
-                                <td><span class="badge bg-primary"><?php echo $s['report_count']; ?></span></td>
+                                <td>
+                                    <span class="badge bg-primary me-1" title="Active Reports"><?php echo $s['active_report_count']; ?> Active</span>
+                                    <?php if ($s['approved_report_count'] > 0): ?>
+                                        <span class="badge bg-success me-1" title="Approved Reports"><?php echo $s['approved_report_count']; ?> Approved</span>
+                                    <?php endif; ?>
+                                    <?php if ($s['deleted_report_count'] > 0): ?>
+                                        <span class="badge bg-danger" title="Deleted Reports"><?php echo $s['deleted_report_count']; ?> Deleted</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td>
                                     <a href="view_student.php?id=<?php echo $s['id']; ?>" class="btn btn-sm btn-outline-primary">View</a>
                                 </td>

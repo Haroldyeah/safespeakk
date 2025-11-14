@@ -60,6 +60,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_FILES) && $_SERVER['CONTENT
             ];
             
             $db->update('reports', $reportData, 'id = ?', [$reportId]);
+
+            // Re-run analyzer on update and attempt to persist severity/recommended actions
+            try {
+                $analysis = analyze_report([
+                    'title' => $title,
+                    'description' => $description,
+                    'date_of_incident' => $dateOfIncident,
+                    'student_id' => $report['student_id'] ?? null,
+                    'school_id' => $selectedSchoolId
+                ], 0);
+
+                $updateData = [];
+                if (!empty($analysis['severity'])) $updateData['severity'] = $analysis['severity'];
+                if (!empty($analysis['suggested_actions'])) $updateData['recommended_actions'] = $analysis['suggested_actions'];
+
+                if (!empty($updateData)) {
+                    try {
+                        $db->update('reports', $updateData, 'id = ?', [$reportId]);
+                    } catch (Exception $e) {
+                        // ignore if column missing
+                    }
+                }
+            } catch (Throwable $t) {
+                // ignore analyzer failures
+            }
             
             // Handle file uploads
             if (isset($_FILES['report_files']) && !empty($_FILES['report_files']['name'][0])) {
