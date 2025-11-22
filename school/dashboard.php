@@ -87,7 +87,7 @@ require_once '../includes/header.php';
         <p>Total Reports</p>
     </div>
     
-    <div class="dashboard-card">
+    <div class="dashboard-card">                                                                          
         <div class="icon">
             <i class="fas fa-clock"></i>
         </div>
