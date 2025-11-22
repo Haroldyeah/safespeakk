@@ -209,6 +209,24 @@ require_once '../includes/header.php';
                             <div class="progress-bar bg-dark" style="width: <?php echo $totalReports > 0 ? ($referredToMswd / $totalReports) * 100 : 0; ?>%"></div>
                         </div>
                     </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="fw-bold">Verified</small>
+                            <small class="text-muted"><?php echo $verifiedReports; ?></small>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-success" style="width: <?php echo $totalReports > 0 ? ($verifiedReports / $totalReports) * 100 : 0; ?>%"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="fw-bold">Verified</small>
+                            <small class="text-muted"><?php echo $verifiedReports; ?></small>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-danger" style="width: <?php echo $totalReports > 0 ? ($verifiedReports / $totalReports) * 100 : 0; ?>%"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

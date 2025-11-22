@@ -30,11 +30,6 @@ $submittedReports = $db->fetchOne(
     [$schoolId, $dateFrom, $dateTo]
 )['count'];
 
-$underReviewReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'under_review' AND submission_date BETWEEN ? AND ?",
-    [$schoolId, $dateFrom, $dateTo]
-)['count'];
-
 $underInvestigationReports = $db->fetchOne(
     "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'under_investigation' AND submission_date BETWEEN ? AND ?",
     [$schoolId, $dateFrom, $dateTo]
@@ -50,20 +45,6 @@ $verifiedReports = $db->fetchOne(
     [$schoolId, $dateFrom, $dateTo]
 )['count'];
 
-$approvedReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'approved' AND submission_date BETWEEN ? AND ?",
-    [$schoolId, $dateFrom, $dateTo]
-)['count'];
-
-$revisionRequiredReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'revision_required' AND submission_date BETWEEN ? AND ?",
-    [$schoolId, $dateFrom, $dateTo]
-)['count'];
-
-$closedReports = $db->fetchOne(
-    "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'closed' AND submission_date BETWEEN ? AND ?",
-    [$schoolId, $dateFrom, $dateTo]
-)['count'];
 
 $rejectedReports = $db->fetchOne(
     "SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'rejected' AND submission_date BETWEEN ? AND ?",
@@ -79,12 +60,10 @@ $monthlyData = $db->fetchAll(
     "SELECT 
         DATE_FORMAT(submission_date, '%Y-%m') as month,
         COUNT(*) as total_submissions,
-        SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_count,
+        SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as verified_count,
         SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_count,
         SUM(CASE WHEN status = 'under_investigation' THEN 1 ELSE 0 END) as under_investigation_count,
-        SUM(CASE WHEN status = 'referred_to_mswd' THEN 1 ELSE 0 END) as referred_to_mswd_count,
-        SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as verified_count,
-        SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) as closed_count
+        SUM(CASE WHEN status = 'referred_to_mswd' THEN 1 ELSE 0 END) as referred_to_mswd_count
      FROM reports 
      WHERE school_id = ? AND submission_date BETWEEN ? AND ?
      GROUP BY DATE_FORMAT(submission_date, '%Y-%m')
@@ -97,13 +76,13 @@ $topStudents = $db->fetchAll(
     "SELECT 
         u.first_name, u.last_name, u.student_id,
         COUNT(r.id) as total_reports,
-        SUM(CASE WHEN r.status = 'approved' THEN 1 ELSE 0 END) as approved_reports
+        SUM(CASE WHEN r.status = 'verified' THEN 1 ELSE 0 END) as verified_reports
      FROM users u
      LEFT JOIN reports r ON u.id = r.student_id AND r.submission_date BETWEEN ? AND ?
      WHERE u.school_id = ? AND u.role = 'student'
      GROUP BY u.id
      HAVING total_reports > 0
-     ORDER BY approved_reports DESC
+     ORDER BY verified_reports DESC
      LIMIT 10",
     [$dateFrom, $dateTo, $schoolId]
 );
@@ -120,9 +99,9 @@ $recentActivity = $db->fetchAll(
 );
 
 // Calculate percentages
-$approvalRate = $totalReports > 0 ? round(($approvedReports / $totalReports) * 100, 1) : 0;
+$approvalRate = $totalReports > 0 ? round(($verifiedReports / $totalReports) * 100, 1) : 0;
 $rejectionRate = $totalReports > 0 ? round(($rejectedReports / $totalReports) * 100, 1) : 0;
-$closureRate = $totalReports > 0 ? round(($closedReports / $totalReports) * 100, 1) : 0;
+
 
 // Get active students count
 $activeStudents = $db->fetchOne(
@@ -197,9 +176,8 @@ require_once '../includes/header.php';
         <div class="col-md-1-5">
             <div class="card text-center">
                 <div class="card-body">
-                    <h3 class="text-success"><?php echo $approvedReports; ?></h3>
-                    <p class="mb-0 text-muted small">Approved</p>
-                    <small class="text-success"><?php echo $approvalRate; ?>%</small>
+                    <h3 class="text-success"><?php echo $submittedReports; ?></h3>
+                    <p class="mb-0 text-muted small">Submitted</p>
                 </div>
             </div>
         </div>
@@ -214,9 +192,8 @@ require_once '../includes/header.php';
         <div class="col-md-1-5">
             <div class="card text-center">
                 <div class="card-body">
-                    <h3 class="text-secondary"><?php echo $closedReports; ?></h3>
-                    <p class="mb-0 text-muted small">Closed</p>
-                    <small class="text-secondary"><?php echo $closureRate; ?>%</small>
+                    <h3 class="text-info"><?php echo $referredToMswd; ?></h3>
+                    <p class="mb-0 text-muted small">Referred to MSWD</p>
                 </div>
             </div>
         </div>
@@ -225,7 +202,6 @@ require_once '../includes/header.php';
                 <div class="card-body">
                     <h3 class="text-danger"><?php echo $rejectedReports; ?></h3>
                     <p class="mb-0 text-muted small">Rejected</p>
-                    <small class="text-danger"><?php echo $rejectionRate; ?>%</small>
                 </div>
             </div>
         </div>
@@ -256,15 +232,7 @@ require_once '../includes/header.php';
                             <div class="progress-bar bg-info" style="width: <?php echo $totalReports > 0 ? ($submittedReports / $totalReports) * 100 : 0; ?>%"></div>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <small class="fw-bold">Under Review</small>
-                            <small class="text-muted"><?php echo $underReviewReports; ?></small>
-                        </div>
-                        <div class="progress" style="height: 6px;">
-                            <div class="progress-bar bg-warning" style="width: <?php echo $totalReports > 0 ? ($underReviewReports / $totalReports) * 100 : 0; ?>%"></div>
-                        </div>
-                    </div>
+           
                     <div class="mb-3">
                         <div class="d-flex justify-content-between mb-1">
                             <small class="fw-bold">Under Investigation</small>
@@ -280,16 +248,26 @@ require_once '../includes/header.php';
                             <small class="text-muted"><?php echo $referredToMswd; ?></small>
                         </div>
                         <div class="progress" style="height: 6px;">
-                            <div class="progress-bar bg-dark" style="width: <?php echo $totalReports > 0 ? ($referredToMswd / $totalReports) * 100 : 0; ?>%"></div>
+                            <div class="progress-bar bg-black" style="width: <?php echo $totalReports > 0 ? ($referredToMswd / $totalReports) * 100 : 0; ?>%"></div>
                         </div>
                     </div>
                     <div class="mb-3">
                         <div class="d-flex justify-content-between mb-1">
-                            <small class="fw-bold">Revision Required</small>
-                            <small class="text-muted"><?php echo $revisionRequiredReports; ?></small>
+                            <small class="fw-bold">Verified</small>
+                            <small class="text-muted"><?php echo $verifiedReports; ?></small>
                         </div>
                         <div class="progress" style="height: 6px;">
-                            <div class="progress-bar bg-warning" style="width: <?php echo $totalReports > 0 ? ($revisionRequiredReports / $totalReports) * 100 : 0; ?>%"></div>
+                            <div class="progress-bar bg-success" style="width: <?php echo $totalReports > 0 ? ($verifiedReports / $totalReports) * 100 : 0; ?>%"></div>
+                        </div>
+                    </div>
+                     <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="fw-bold">Rejected</small>
+                            <small class="text-muted"><?php echo $rejectedReports; ?></small>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-danger" style="width: <?php echo $totalReports > 0 ? ($rejectedReports / $totalReports) * 100 : 0; ?>%"></div>
+         
                         </div>
                     </div>
                 </div>
@@ -345,7 +323,6 @@ require_once '../includes/header.php';
                                         <th>Student Name</th>
                                         <th>Student ID</th>
                                         <th>Reports Submitted</th>
-                                        <th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -360,13 +337,7 @@ require_once '../includes/header.php';
                                             <td>
                                                 <span class="badge bg-primary"><?php echo $student['total_reports']; ?></span>
                                             </td>
-                                            <td>
-                                                <?php if ($student['approved_reports'] > 0): ?>
-                                                    <span class="badge bg-success">Approved</span>
-                                                <?php else: ?>
-                                                    <span class="badge bg-warning">Pending</span>
-                                                <?php endif; ?>
-                                            </td>
+                                          
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -442,15 +413,15 @@ require_once '../includes/header.php';
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-// Status Distribution Chart (All 9 Statuses)
+// Status Distribution Chart 
 const statusCtx = document.getElementById('statusChart').getContext('2d');
 const statusChart = new Chart(statusCtx, {
     type: 'doughnut',
     data: {
-        labels: ['Submitted', 'Under Review', 'Under Investigation', 'Referred to MSWD', 'Verified', 'Approved', 'Revision Required', 'Rejected', 'Closed'],
+        labels: ['Submitted', 'Under Investigation', 'Referred to MSWD', 'Verified', 'Rejected'],
         datasets: [{
-            data: [<?php echo $submittedReports; ?>, <?php echo $underReviewReports; ?>, <?php echo $underInvestigationReports; ?>, <?php echo $referredToMswd; ?>, <?php echo $verifiedReports; ?>, <?php echo $approvedReports; ?>, <?php echo $revisionRequiredReports; ?>, <?php echo $rejectedReports; ?>, <?php echo $closedReports; ?>],
-            backgroundColor: ['#3B82F6', '#F59E0B', '#8B5CF6', '#1F2937', '#10B981', '#059669', '#FCD34D', '#EF4444', '#6B7280']
+            data: [<?php echo $submittedReports; ?>, <?php echo $underInvestigationReports; ?>, <?php echo $referredToMswd; ?>, <?php echo $verifiedReports; ?>, <?php echo $rejectedReports; ?>],
+            backgroundColor: ['#3B82F6', '#8B5CF6', '#1F2937', '#10B981', '#EF4444']
         }]
     },
     options: {
@@ -501,18 +472,6 @@ const trendsChart = new Chart(trendsCtx, {
             pointBorderWidth: 2,
             pointRadius: 5
         }, {
-            label: 'Approved',
-            data: [<?php echo implode(',', array_column($monthlyData, 'approved_count')); ?>],
-            borderColor: '#059669',
-            backgroundColor: 'rgba(5, 150, 105, 0.05)',
-            fill: true,
-            tension: 0.4,
-            borderWidth: 2,
-            pointBackgroundColor: '#059669',
-            pointBorderColor: '#ffffff',
-            pointBorderWidth: 2,
-            pointRadius: 5
-        }, {
             label: 'Under Investigation',
             data: [<?php echo implode(',', array_column($monthlyData, 'under_investigation_count')); ?>],
             borderColor: '#8B5CF6',
@@ -533,18 +492,6 @@ const trendsChart = new Chart(trendsCtx, {
             tension: 0.4,
             borderWidth: 2,
             pointBackgroundColor: '#1F2937',
-            pointBorderColor: '#ffffff',
-            pointBorderWidth: 2,
-            pointRadius: 5
-        }, {
-            label: 'Closed',
-            data: [<?php echo implode(',', array_column($monthlyData, 'closed_count')); ?>],
-            borderColor: '#6B7280',
-            backgroundColor: 'rgba(107, 114, 128, 0.05)',
-            fill: true,
-            tension: 0.4,
-            borderWidth: 2,
-            pointBackgroundColor: '#6B7280',
             pointBorderColor: '#ffffff',
             pointBorderWidth: 2,
             pointRadius: 5

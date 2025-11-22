@@ -162,8 +162,9 @@ require_once '../includes/header.php';
                 <select class="form-select" name="status">
                     <option value="">All Statuses</option>
                     <option value="submitted" <?php echo $statusFilter === 'submitted' ? 'selected' : ''; ?>>Submitted</option>
-                    <option value="under_review" <?php echo $statusFilter === 'under_review' ? 'selected' : ''; ?>>Under Review</option>
-                    <option value="approved" <?php echo $statusFilter === 'approved' ? 'selected' : ''; ?>>Approved</option>
+                    <option value="under_investigation" <?php echo $statusFilter === 'under_investigation' ? 'selected' : ''; ?>>Under Investigation</option>
+                    <option value="referred_to_mswd" <?php echo $statusFilter === 'referred_to_mswd' ? 'selected' : ''; ?>>Referred to MSWD</option>
+                    <option value="verified" <?php echo $statusFilter === 'verified ' ? 'selected' : ''; ?>>Verified</option>
                     <option value="rejected" <?php echo $statusFilter === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
                 </select>
             </div>

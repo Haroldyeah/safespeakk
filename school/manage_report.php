@@ -478,9 +478,12 @@ require_once '../includes/header.php';
                                   placeholder="Add your review comments here..."><?php echo htmlspecialchars($report['school_comments'] ?? ''); ?></textarea>
                     </div>
                     
-                    <div class="d-grid">
+                    <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save me-1"></i>Update Status
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="printReport(<?php echo $report['id']; ?>)">
+                            <i class="fas fa-print me-1"></i>Print Report
                         </button>
                     </div>
                 </form>
