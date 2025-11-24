@@ -26,6 +26,9 @@
     <!-- Custom JS -->
     <script src="<?php echo BASE_URL; ?>/assets/js/main.js"></script>
     
+    <!-- Password Strength Indicator -->
+    <script src="<?php echo BASE_URL; ?>/assets/js/password-strength.js"></script>
+    
     <!-- Global Image Viewer Modal (reusable) -->
     <div class="modal fade" id="globalImageViewer" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">

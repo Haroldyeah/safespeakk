@@ -1,6 +1,6 @@
 <?php
 /**
- * Email template for user profile updates.
+ * Email template for admin notification when a school profile is updated.
  *
  * @var array $user The user whose profile was updated.
  * @var array $updatedBy The user who performed the update.
@@ -134,14 +134,14 @@
             color: #888;
             margin-bottom: 4px;
         }
-        .warning-box {
-            background-color: #fef3cd;
-            border-left: 4px solid #ffc107;
+        .alert-box {
+            background-color: #e8f4f8;
+            border-left: 4px solid #3498db;
             padding: 12px 14px;
             margin: 16px 0;
             border-radius: 4px;
             font-size: 13px;
-            color: #856404;
+            color: #2c3e50;
             line-height: 1.6;
         }
         .footer {
@@ -169,17 +169,17 @@
     <div class="container">
         <div class="email-wrapper">
             <div class="header">
-                <h2>Your Profile Has Been Updated</h2>
+                <h2>School Profile Update Alert</h2>
             </div>
             <div class="content">
-                <p class="greeting">Good day,</p>
-                <p class="intro-text">Your profile in the Capstone Tracker system was recently updated. Below is a summary of the changes made.</p>
+                <p class="greeting">Good day Administrator,</p>
+                <p class="intro-text">A profile was recently updated in the Capstone Tracker system. Please review the details below for your records.</p>
 
                 <div class="section-title">Profile Information</div>
                 <table class="info-table">
                     <?php if ($userRole === 'Student'): ?>
                         <tr>
-                            <td>Name</td>
+                            <td>Student Name</td>
                             <td><?php echo htmlspecialchars(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')); ?></td>
                         </tr>
                         <tr>
@@ -196,16 +196,20 @@
                             <td><?php echo htmlspecialchars($user['name'] ?? 'Unknown'); ?></td>
                         </tr>
                         <tr>
-                            <td>Email</td>
+                            <td>School Email</td>
                             <td><?php echo htmlspecialchars($user['email'] ?? '—'); ?></td>
                         </tr>
                         <tr>
                             <td>Contact Person</td>
                             <td><?php echo htmlspecialchars($user['contact_person'] ?? '—'); ?></td>
                         </tr>
+                        <tr>
+                            <td>Phone</td>
+                            <td><?php echo htmlspecialchars($user['phone'] ?? '—'); ?></td>
+                        </tr>
                     <?php else: ?>
                         <tr>
-                            <td>Name</td>
+                            <td>Administrator Name</td>
                             <td><?php echo htmlspecialchars(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')); ?></td>
                         </tr>
                         <tr>
@@ -249,11 +253,11 @@
                                     <div class="field-label"><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $fieldName))); ?></div>
                                     <div class="change-row">
                                         <div class="before">
-                                            <div class="before-label">Before:</div>
+                                            <div class="before-label">Previous Value:</div>
                                             <div class="value-box"><?php echo htmlspecialchars($changeData['old'] ?? '—'); ?></div>
                                         </div>
                                         <div class="after">
-                                            <div class="after-label">After:</div>
+                                            <div class="after-label">New Value:</div>
                                             <div class="value-box"><?php echo htmlspecialchars($changeData['new'] ?? '—'); ?></div>
                                         </div>
                                     </div>
@@ -262,8 +266,8 @@
                         <?php endforeach; ?>
                     </div>
                 <?php else: ?>
-                    <div class="alert-box" style="margin-top: 20px;">
-                        ℹ️ No specific changes were recorded in this update.
+                    <div class="alert-box">
+                        ℹ️ No specific field changes were logged for this update.
                     </div>
                 <?php endif; ?>
 
@@ -271,7 +275,7 @@
                 <table class="info-table">
                     <tr>
                         <td>Updated By</td>
-                        <td><?php echo htmlspecialchars((is_array($updatedBy) ? ($updatedBy['name'] ?? ($updatedBy['first_name'] ?? '' . ' ' . $updatedBy['last_name'] ?? '')) : 'System')); ?></td>
+                        <td><?php echo htmlspecialchars((is_array($updatedBy) ? ($updatedBy['name'] ?? 'Unknown') : 'System')); ?></td>
                     </tr>
                     <tr>
                         <td>Updated By Email</td>
@@ -283,8 +287,8 @@
                     </tr>
                 </table>
 
-                <div class="warning-box">
-                    ⚠️ If you did not authorize this change or have concerns, please contact your system administrator immediately.
+                <div class="alert-box">
+                    ℹ️ This is an automated alert for administrative purposes. If you have concerns about this update, please contact the school directly.
                 </div>
 
                 <p style="font-size: 12px; color: #888; margin-top: 16px;">This is an automated message from Capstone Tracker. Please do not reply directly to this email.</p>

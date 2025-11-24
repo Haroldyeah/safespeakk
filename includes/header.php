@@ -33,6 +33,7 @@ $is_landing_page = basename($_SERVER['PHP_SELF']) == 'index.php';
     <link href="<?php echo BASE_URL; ?>/assets/css/style.css" rel="stylesheet">
     <link href="<?php echo BASE_URL; ?>/assets/css/dashboard-theme.css" rel="stylesheet">
     <link href="<?php echo BASE_URL; ?>/assets/css/header-profile.css" rel="stylesheet">
+    <link href="<?php echo BASE_URL; ?>/assets/css/password-strength.css" rel="stylesheet">
     <?php
     $current_page = basename($_SERVER['PHP_SELF']);
     $exclude_dark_mode_pages = ['index.php', 'login.php', 'register.php'];

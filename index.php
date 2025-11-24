@@ -85,7 +85,7 @@ require_once 'includes/header.php';
       </div>
       <div class="relative">
         <div class="rounded-2xl overflow-hidden shadow-2xl">
-          <img src="uploads/hero-counselor.png" alt="School counselor and student" class="w-full h-64 md:h-96 object-cover" />
+          <img src="uploads/a9778a1f-b9f9-4aab-a19e-af2908dcc7c1.jpg" alt="School counselor and student" class="w-full h-64 md:h-96 object-cover" />
         </div>
         <div class="absolute -bottom-6 left-6 bg-white rounded-xl p-4 shadow-md w-64 max-w-[60%] md:max-w-[100%]">
           <div class="text-sm text-gray-500">Reports received</div>

@@ -1,6 +1,7 @@
 <?php
 $pageTitle = 'Login';
 require_once '../config/config.php';
+require_once '../includes/security.php';
 
 // Redirect if already logged in
 if (isLoggedIn()) {
@@ -25,7 +26,12 @@ if ($_POST) {
     $username = sanitizeInput($_POST['username']);
     $password = $_POST['password'];
     
-    if (empty($username) || empty($password)) {
+    // Check brute force protection
+    if (isAccountLocked($username)) {
+        $timeRemaining = getLockoutTimeRemaining($username);
+        $minutes = ceil($timeRemaining / 60);
+        $error = "Account temporarily locked due to too many failed attempts. Please try again in approximately $minutes minute(s).";
+    } elseif (empty($username) || empty($password)) {
         $error = 'Please fill in all fields.';
     } else {
         if ($loginType === 'school') {
@@ -36,6 +42,9 @@ if ($_POST) {
             );
             
             if ($school && verifyPassword($password, $school['password'])) {
+                // Record successful login
+                recordSuccessfulLogin($username);
+                
                 // Generate OTP
                 $otp = rand(100000, 999999);
                 $_SESSION['otp_code'] = $otp;
@@ -57,7 +66,15 @@ if ($_POST) {
                 
                 redirect('verify_otp.php', 'Please check your email for the OTP.', 'info');
             } else {
+                // Record failed attempt
+                recordFailedAttempt($username);
+                $attempts = getFailedAttempts($username);
                 $error = 'Invalid school credentials.';
+                if ($attempts >= 3) {
+                    $timeRemaining = getLockoutTimeRemaining($username);
+                    $minutes = ceil($timeRemaining / 60);
+                    $error .= " Account will be locked after 5 failed attempts. ($attempts/5 attempts)";
+                }
             }
         } else {
             // Student/Admin login
@@ -67,6 +84,9 @@ if ($_POST) {
             );
             
             if ($user && verifyPassword($password, $user['password'])) {
+                // Record successful login
+                recordSuccessfulLogin($username);
+                
                 if ($user['is_verified'] == 0) {
                     $error = 'Your account is not verified. Please check your email for the verification link.';
                     // Optionally, add a resend verification email link here.
@@ -74,6 +94,7 @@ if ($_POST) {
                     // Check if login type matches user role
                     if (($loginType === 'admin' && $user['role'] !== 'admin') ||
                         ($loginType === 'student' && $user['role'] !== 'student'))  {
+                        recordFailedAttempt($username);
                         $error = 'Invalid credentials for this login type.';
                     } else {
                         // Generate OTP
@@ -99,7 +120,15 @@ if ($_POST) {
                     }
                 }
             } else {
+                // Record failed attempt
+                recordFailedAttempt($username);
+                $attempts = getFailedAttempts($username);
                 $error = 'Invalid credentials.';
+                if ($attempts >= 3) {
+                    $timeRemaining = getLockoutTimeRemaining($username);
+                    $minutes = ceil($timeRemaining / 60);
+                    $error .= " Account will be locked after 5 failed attempts. ($attempts/5 attempts)";
+                }
             }
         }
     }

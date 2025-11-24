@@ -84,7 +84,7 @@ require_once '../includes/header.php';
     <div class="col-auto">
         <div class="btn-group">
             <button class="btn btn-primary" onclick="window.print();"><i class="fas fa-print me-1"></i>Print Report</button>
-            <a href="download_analytics.php" class="btn btn-success"><i class="fas fa-download me-1"></i>Download PDF</a>
+            <a href="export_analytics_pdf.php?date_from=<?php echo urlencode($dateFrom); ?>&date_to=<?php echo urlencode($dateTo); ?>&school_id=<?php echo urlencode($schoolFilter); ?>" class="btn btn-success"><i class="fas fa-download me-1"></i>Download PDF</a>
         </div>
     </div>
 </div>

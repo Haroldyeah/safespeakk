@@ -2,11 +2,15 @@
 require_once '../config/config.php';
 requireRole('admin');
 
-    use Dompdf\Dompdf;
-    use Dompdf\Options;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 // Database connection is already initialized in config.php
 global $db;
+
+// Check if we're receiving captured charts via AJAX/POST
+$statusChartBase64 = $_POST['status_chart'] ?? null;
+$trendsChartBase64 = $_POST['trends_chart'] ?? null;
 
 
 // Filters
@@ -110,14 +114,28 @@ $html .= '<div class="stat-card"><div class="stat-number" style="color: #447acff
 $html .= '<div class="stat-card"><div class="stat-number" style="color: #EF4444;">' . $rejectedReports . '</div><div class="stat-label">Rejected</div><div style="color: #EF4444; font-size: 12px;">' . $rejectionRate . '%</div></div>';
 $html .= '<div class="stat-card"><div class="stat-number">' . $activeStudents . '</div><div class="stat-label">Active Students</div></div>';
 $html .= '</div></div>';
-// Ensure months with zero data (e.g., October) are shown
+
+// Add Status Distribution Chart if captured and valid
+if ($statusChartBase64 && strpos($statusChartBase64, 'data:image') === 0 && strlen($statusChartBase64) > 100) {
+    $html .= '<div class="section"><div class="section-title">Report Status Distribution</div>';
+    $html .= '<img src="' . htmlspecialchars($statusChartBase64) . '" style="width: 100%; max-height: 400px; object-fit: contain;" />';
+    $html .= '</div>';
+}
+
+// Add Monthly Trends Chart if captured and valid
+if ($trendsChartBase64 && strpos($trendsChartBase64, 'data:image') === 0 && strlen($trendsChartBase64) > 100) {
+    $html .= '<div class="section"><div class="section-title">Monthly Submission Trends</div>';
+    $html .= '<img src="' . htmlspecialchars($trendsChartBase64) . '" style="width: 100%; max-height: 400px; object-fit: contain;" />';
+    $html .= '</div>';
+}
+// Monthly trends table (supplements the chart)
 if (!empty($monthlyData)) {
     $monthlyMap = [];
     foreach ($monthlyData as $m) {
         $monthlyMap[$m['month']] = $m;
     }
 
-    $html .= '<div class="section"><div class="section-title">Monthly Submission Trends</div><table><thead><tr><th>Month</th><th>Total</th><th>Verified</th><th>Rejected</th><th>Referred to MSWD</th><th>Under Investigation</th><th>Rate</th></tr></thead><tbody>';
+    $html .= '<div class="section"><div class="section-title">Monthly Submission Details</div><table><thead><tr><th>Month</th><th>Total</th><th>Verified</th><th>Rejected</th><th>Referred to MSWD</th><th>Under Investigation</th><th>Rate</th></tr></thead><tbody>';
 
     $start = new DateTime(date('Y-m-01', strtotime($dateFrom)));
     $end = new DateTime(date('Y-m-01', strtotime($dateTo)));

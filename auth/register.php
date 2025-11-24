@@ -1,6 +1,7 @@
 <?php
 $pageTitle = 'Student Registration';
 require_once '../config/config.php';
+require_once '../includes/security.php';
 
 // Redirect if already logged in
 if (isLoggedIn()) {
@@ -64,8 +65,8 @@ if ($_POST) {
         $error = 'Please fill in all required fields.';
     } elseif ($password !== $confirmPassword) {
         $error = 'Passwords do not match.';
-    } elseif (strlen($password) < 6) {
-        $error = 'Password must be at least 6 characters long.';
+    } elseif (strlen($password) < 8) {
+        $error = 'Password must be at least 8 characters long.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } elseif (!isset($_FILES['id_photo']) || $_FILES['id_photo']['error'] != 0) {
@@ -136,6 +137,8 @@ if ($_POST) {
 require_once '../includes/header.php';
 ?>
 
+<link rel="stylesheet" href="../assets/css/password-strength.css">
+
 <div class="container py-5">
     <div class="row justify-content-center">
         <div class="col-lg-9">
@@ -197,19 +200,13 @@ require_once '../includes/header.php';
                                 <input type="email" class="form-control" id="email" name="email" value="<?php echo htmlspecialchars($email ?? ''); ?>" required>
                             </div>
 
-                            <div class="col-md-6 position-relative">
+                            <div class="col-md-6">
                                 <label for="password" class="form-label small fw-semibold">Password *</label>
-                                <input type="password" class="form-control" id="password" name="password" minlength="6" required>
-                                <span class="position-absolute top-50 end-0 translate-middle-y pe-3 toggle-password" style="cursor: pointer; margin-top: 12px;" data-target="#password">
-                                    <i class="fas fa-eye"></i>
-                                </span>
+                                <input type="password" class="form-control" id="password" name="password" minlength="8" data-strength="true" required>
                             </div>
-                            <div class="col-md-6 position-relative">
+                            <div class="col-md-6">
                                 <label for="confirm_password" class="form-label small fw-semibold">Confirm Password *</label>
-                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" minlength="6" required>
-                                <span class="position-absolute top-50 end-0 translate-middle-y pe-3 toggle-password" style="cursor: pointer; margin-top: 12px;" data-target="#confirm_password">
-                                    <i class="fas fa-eye"></i>
-                                </span>
+                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" minlength="8" required>
                             </div>
 
                             <div class="col-md-6">
@@ -279,20 +276,6 @@ if (idPhoto) {
     });
 }
 </script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const passwordToggles = document.querySelectorAll('.toggle-password');
+<script src="../assets/js/password-strength.js"></script>
 
-    passwordToggles.forEach(toggle => {
-        toggle.addEventListener('click', function () {
-            const passwordField = document.querySelector(this.getAttribute('data-target'));
-            const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordField.setAttribute('type', type);
-            this.querySelector('i').classList.toggle('fa-eye-slash');
-            this.querySelector('i').classList.toggle('fa-eye');
-        });
-    });
-});
-</script>
-
-
+<?php require_once '../includes/footer.php'; ?>

@@ -527,10 +527,10 @@ function printAnalytics() {
 }
 
 function downloadAnalytics() {
-    // Create form for PDF download
+    // Create form for PDF download with charts
     const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = 'download_analytics.php';
+    form.method = 'GET';
+    form.action = 'export_analytics_pdf.php';
     
     // Add current filter parameters
     const params = new URLSearchParams(window.location.search);

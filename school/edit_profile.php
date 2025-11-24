@@ -1,6 +1,7 @@
 <?php
 $pageTitle = 'Edit School Profile';
 require_once '../config/config.php';
+require_once '../includes/security.php';
 requireRole('school');
 
 $schoolId = $_SESSION['school_id'];
@@ -107,13 +108,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($oldSchool['address'] !== $address) {
                 $changes['address'] = ['old' => $oldSchool['address'], 'new' => $address];
             }
+            if ($newPassword !== '') {
+                $changes['password'] = ['old' => '***', 'new' => '***'];
+            }
 
-            // Notify admins
+            // Notify admins and school user
             require_once '../config/mail.php';
             require_once '../templates/email/load_template.php';
 
             $admins = $db->fetchAll("SELECT * FROM users WHERE role = 'admin'");
-            $updatedBy = $db->fetchOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
+            
+            // Get the school user who made the update (if exists) or use school name as updatedBy
+            $updatedBy = $db->fetchOne("SELECT * FROM users WHERE school_id = ? AND role = 'school' LIMIT 1", [$schoolId]);
+            
+            // If no user account for school, create a generic entry
+            if (!$updatedBy) {
+                $updatedBy = [
+                    'id' => $schoolId,
+                    'name' => $school['contact_person'] ?? $school['name'],
+                    'email' => $school['email'],
+                    'role' => 'school'
+                ];
+            }
             
             $emailData = [
                 'user' => $school,
@@ -123,11 +139,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'timestamp' => date('Y-m-d H:i:s')
             ];
 
-            $emailBody = load_email_template('profile_updated.php', $emailData);
-            $subject = 'School Profile Updated: ' . $school['name'];
+            // Send email to the school user (school notification)
+            $schoolEmailBody = load_email_template('profile_updated.php', $emailData);
+            $subject = 'Your Profile Has Been Updated: ' . $school['name'];
+            sendMail($school['email'], $subject, $schoolEmailBody);
 
+            // Send email to admins (admin notification)
+            $adminEmailBody = load_email_template('profile_updated_admin.php', $emailData);
+            $adminSubject = 'School Profile Updated: ' . $school['name'];
             foreach ($admins as $admin) {
-                sendMail($admin['email'], $subject, $emailBody);
+                sendMail($admin['email'], $adminSubject, $adminEmailBody);
             }
         } else {
             $errors[] = 'Failed to update profile.';
@@ -217,11 +238,9 @@ require_once '../includes/header.php';
                                 <label class="form-label">Current Password</label>
                                 <input type="password" name="current_password" class="form-control">
                                 <small class="text-muted">Required to change password</small>
-                            </div>
-
-                            <div class="col-md-4">
+                            </div>                            <div class="col-md-4">
                                 <label class="form-label">New Password</label>
-                                <input type="password" name="new_password" class="form-control">
+                                <input type="password" name="new_password" class="form-control" data-strength="true" minlength="8">
                                 <small class="text-muted">Min. 8 characters</small>
                             </div>
 

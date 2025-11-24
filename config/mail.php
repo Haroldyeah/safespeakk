@@ -6,7 +6,7 @@ require_once __DIR__ . '/../includes/phpmailer/PHPMailer-master/src/PHPMailer.ph
 require_once __DIR__ . '/../includes/phpmailer/PHPMailer-master/src/SMTP.php';
 require_once __DIR__ . '/../includes/phpmailer/PHPMailer-master/src/Exception.php';
 
-function sendMail($to, $subject, $body, $from = null, $fromName = null) {
+function sendMail($to, $subject, $body, $from = null, $fromName = null, $attachments = []) {
     $mail = new PHPMailer(true);
     try {
         $mail->isSMTP();
@@ -35,6 +35,15 @@ function sendMail($to, $subject, $body, $from = null, $fromName = null) {
         $mail->isHTML(true);
         $mail->Subject = $subject;
         $mail->Body    = $body;
+
+        // Add attachments if provided
+        if (!empty($attachments) && is_array($attachments)) {
+            foreach ($attachments as $attachment) {
+                if (isset($attachment['path']) && file_exists($attachment['path'])) {
+                    $mail->addAttachment($attachment['path'], $attachment['name'] ?? basename($attachment['path']));
+                }
+            }
+        }
 
         $mail->send();
         return true;

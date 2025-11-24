@@ -12,10 +12,13 @@ use Dompdf\Options;
 
 $schoolId = $_SESSION['school_id'];
 
+// Check if we're receiving captured chart via POST
+$monthlyChartBase64 = $_POST['monthly_chart'] ?? null;
+
 // Filters
-$dateFrom = $_POST['date_from'] ?? date('Y-01-01');
-$dateTo = $_POST['date_to'] ?? date('Y-12-31');
-$academicYear = $_POST['academic_year'] ?? date('Y');
+$dateFrom = $_POST['date_from'] ?? $_GET['date_from'] ?? date('Y-01-01');
+$dateTo = $_POST['date_to'] ?? $_GET['date_to'] ?? date('Y-12-31');
+$academicYear = $_POST['academic_year'] ?? $_GET['academic_year'] ?? date('Y');
 
 // ==============================
 //  SCHOOL INFORMATION
@@ -187,6 +190,13 @@ $html .= '<div class="stat-card"><div class="stat-number" style="color:#EF4444;"
 $html .= '<div class="stat-card"><div class="stat-number">' . $activeStudents . '</div><div class="stat-label">Active Students</div></div>';
 
 $html .= '</div></div>';
+
+// Add Monthly Chart if captured and valid
+if ($monthlyChartBase64 && strpos($monthlyChartBase64, 'data:image') === 0 && strlen($monthlyChartBase64) > 100) {
+    $html .= '<div class="section"><div class="section-title">Monthly Submission Trends - Chart</div>';
+    $html .= '<img src="' . htmlspecialchars($monthlyChartBase64) . '" style="width: 100%; max-height: 400px; object-fit: contain;" />';
+    $html .= '</div>';
+}
 
 // ==============================
 // Monthly Trends

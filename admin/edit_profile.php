@@ -1,6 +1,7 @@
 <?php
 $pageTitle = 'Edit Profile';
 require_once '../config/config.php';
+require_once '../includes/security.php';
 requireRole('admin');
 
 $userId = $_SESSION['user_id'];
@@ -110,12 +111,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($oldUser['username'] !== $username) {
                 $changes['username'] = ['old' => $oldUser['username'], 'new' => $username];
             }
+            if ($newPassword !== '') {
+                $changes['password'] = ['old' => '***', 'new' => '***'];
+            }
 
-            // Notify other system administrators about this profile update
+            // Notify admin and other system administrators about this profile update
             require_once __DIR__ . '/../config/mail.php';
             require_once __DIR__ . '/../templates/email/load_template.php';
 
-            $admins = $db->fetchAll("SELECT * FROM users WHERE role = 'admin' AND id != ?", [$userId]);
+            $otherAdmins = $db->fetchAll("SELECT * FROM users WHERE role = 'admin' AND id != ?", [$userId]);
             $updatedBy = $db->fetchOne("SELECT id, first_name, last_name, email FROM users WHERE id = ?", [$userId]);
 
             $emailData = [
@@ -126,11 +130,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'timestamp' => date('Y-m-d H:i:s')
             ];
 
-            $emailBody = load_email_template('profile_updated.php', $emailData);
-            $subject = 'Administrator Profile Updated: ' . $user['first_name'] . ' ' . $user['last_name'];
+            // Send email to the admin who made changes
+            $adminEmailBody = load_email_template('profile_updated.php', $emailData);
+            $subject = 'Your Profile Has Been Updated';
+            sendMail($user['email'], $subject, $adminEmailBody);
 
-            foreach ($admins as $admin) {
-                sendMail($admin['email'], $subject, $emailBody);
+            // Send email to other administrators
+            $otherAdminsEmailBody = load_email_template('profile_updated_admin.php', $emailData);
+            $otherAdminsSubject = 'Administrator Profile Updated: ' . $user['first_name'] . ' ' . $user['last_name'];
+
+            foreach ($otherAdmins as $admin) {
+                sendMail($admin['email'], $otherAdminsSubject, $otherAdminsEmailBody);
             }
         } else {
             $errors[] = 'Failed to update profile.';
@@ -199,7 +209,7 @@ require_once '../includes/header.php';
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">New Password</label>
-                                <input type="password" name="new_password" class="form-control">
+                                <input type="password" name="new_password" class="form-control" data-strength="true" minlength="8">
                                 <small class="text-muted">Min. 8 characters</small>
                             </div>
                             <div class="col-md-4">
