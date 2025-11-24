@@ -164,22 +164,4 @@ Contributions are welcome! If you’d like to help:
 
 ## 📝 License & Disclaimer
 
-This project is developed for educational purposes and designed to support anti‑bullying efforts in high‑school environments. Use at your own risk.
-(If you have a specific license, e.g., MIT, include it here.)
-
----
-
-## 📞 Contact & Support
-
-For questions about deployment, customization, or feature requests, please contact:
-
-* Project Maintainer: Harold Arreglado – haroldarreglado902@gmail.com
-
-
----
-
-*Last updated: **November 14, 2025***
-
-**Live Demo:** [https://safespeak.page.gd/](https://safespeak.page.gd/)
-
----
+This project is developed for educational purposes as part of a capstone project management system.
