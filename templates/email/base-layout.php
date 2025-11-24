@@ -15,13 +15,13 @@
  */
 
 function getEmailLayout($config = []) {
-    $title = $config['title'] ?? 'Capstone Tracker Notification';
+    $title = $config['title'] ?? 'Safespeak Notification';
     $headerColor = $config['headerColor'] ?? '#667eea';
     $headerColorLight = $config['headerColorLight'] ?? '#764ba2';
     $content = $config['content'] ?? '';
-    $footerText = $config['footer'] ?? '&copy; ' . date('Y') . ' Capstone Tracker. All rights reserved.';
-    $appName = $config['appName'] ?? 'Capstone Tracker';
-    $baseUrl = $config['baseUrl'] ?? 'https://safespeak.local';
+    $footerText = $config['footer'] ?? '&copy; ' . date('Y') . ' Safespeak. All rights reserved.';
+    $appName = $config['appName'] ?? 'Safespeak';
+    $baseUrl = $config['baseUrl'] ?? 'https://safespeak.page.gd';
 
     return <<<HTML
 <!DOCTYPE html>

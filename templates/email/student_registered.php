@@ -191,7 +191,7 @@
                 <p style="font-size: 12px; color: #888; margin-top: 16px;">This is an automated notification from <?php echo htmlspecialchars($appName ?? 'Capstone Tracker'); ?>. Please do not reply directly to this email.</p>
             </div>
             <div class="footer">
-                <p class="footer-text">&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($appName ?? 'Capstone Tracker'); ?>. All rights reserved.</p>
+                <p class="footer-text">&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($appName ?? 'Safespeak'); ?>. All rights reserved.</p>
             </div>
         </div>
     </div>

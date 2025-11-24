@@ -153,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 require_once __DIR__ . '/../templates/email/load_template.php';
                 $statusLabel = ucfirst(str_replace('_', ' ', $newStatus));
-                $reportUrl = rtrim(BASE_URL, '/') . '/student/view_report.php?id=' . $reportId;
+                $reportUrl = rtrim(BASE_URL, '/') . '/student/edit_report.php?id=' . $reportId;
                 $body = load_email_template('report_status_updated.php', [
                     'studentName' => $reportDetails['first_name'] . ' ' . $reportDetails['last_name'],
                     'statusLabel' => $statusLabel,

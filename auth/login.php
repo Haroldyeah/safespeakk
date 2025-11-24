@@ -27,10 +27,21 @@ if ($_POST) {
     $password = $_POST['password'];
     
     // Check brute force protection
+    $showLockMessage = false;
     if (isAccountLocked($username)) {
         $timeRemaining = getLockoutTimeRemaining($username);
-        $minutes = ceil($timeRemaining / 60);
-        $error = "Account temporarily locked due to too many failed attempts. Please try again in approximately $minutes minute(s).";
+        // If lockout expired (time remaining is 0 or negative), allow login to proceed
+        if ($timeRemaining > 0) {
+            $minutes = ceil($timeRemaining / 60);
+            $seconds = $timeRemaining % 60;
+            $error = "Account temporarily locked due to too many failed attempts. Please try again in approximately $minutes minute(s) and $seconds second(s).";
+            $showLockMessage = true;
+        }
+    }
+    
+    // Only proceed with login if not locked
+    if ($showLockMessage) {
+        // Account is locked, don't proceed with login attempt
     } elseif (empty($username) || empty($password)) {
         $error = 'Please fill in all fields.';
     } else {
@@ -239,6 +250,15 @@ document.addEventListener('DOMContentLoaded', function () {
             this.querySelector('i').classList.toggle('fa-eye');
         });
     });
+
+    // Auto-refresh if account is locked (to update the remaining time or unlock)
+    const lockoutMessage = document.querySelector('.alert-danger');
+    if (lockoutMessage && lockoutMessage.textContent.includes('temporarily locked')) {
+        // Refresh every 30 seconds to check if lockout has expired
+        setInterval(function() {
+            location.reload();
+        }, 30000); // 30 seconds
+    }
 });
 </script>
 

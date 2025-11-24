@@ -114,7 +114,7 @@ if ($_POST) {
                     // Send verification email
                     require_once __DIR__ . '/../config/mail.php';
                     require_once __DIR__ . '/../templates/email/load_template.php';
-                    $verificationLink = BASE_URL . 'auth/verify_email.php?token=' . $verificationToken;
+                    $verificationLink = BASE_URL . '/auth/verify_email.php?token=' . $verificationToken;
                     
                     $subject = 'Verify Your Email for ' . APP_NAME;
                     $body = "<p>Hello " . htmlspecialchars($firstName) . ",</p>"

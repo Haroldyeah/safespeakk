@@ -149,7 +149,7 @@
         <p style="font-size: 12px; color: #888;">If you have questions or concerns, please reach out to your school administrator or system support.</p>
       </div>
       <div class="footer">
-        <p class="footer-text">&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($appName ?? 'Capstone Tracker'); ?>. All rights reserved.</p>
+        <p class="footer-text">&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($appName ?? 'Safespeak'); ?>. All rights reserved.</p>
       </div>
     </div>
   </div>

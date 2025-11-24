@@ -291,10 +291,10 @@
                     ℹ️ This is an automated alert for administrative purposes. If you have concerns about this update, please contact the school directly.
                 </div>
 
-                <p style="font-size: 12px; color: #888; margin-top: 16px;">This is an automated message from Capstone Tracker. Please do not reply directly to this email.</p>
+                <p style="font-size: 12px; color: #888; margin-top: 16px;">This is an automated message from Safespeak. Please do not reply directly to this email.</p>
             </div>
             <div class="footer">
-                <p class="footer-text">&copy; <?php echo date('Y'); ?> Capstone Tracker. All rights reserved.</p>
+                <p class="footer-text">&copy; <?php echo date('Y'); ?> Safespeak. All rights reserved.</p>
             </div>
         </div>
     </div>

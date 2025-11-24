@@ -154,7 +154,7 @@
         <p style="font-size: 12px; color: #888;">For questions or concerns, please contact your system administrator.</p>
       </div>
       <div class="footer">
-        <p class="footer-text">&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($appName ?? 'Capstone Tracker'); ?>. All rights reserved.</p>
+        <p class="footer-text">&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($appName ?? 'Safespeak'); ?>. All rights reserved.</p>
       </div>
     </div>
   </div>

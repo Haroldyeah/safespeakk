@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $schoolSmtp = $db->fetchOne("SELECT smtp_host, smtp_port, smtp_username, smtp_password, from_email, from_name FROM schools WHERE id = ?", [$schoolId]);
                 require_once __DIR__ . '/../templates/email/load_template.php';
                 $statusLabel = ucfirst(str_replace('_', ' ', $newStatus));
-                $reportUrl = rtrim(BASE_URL, '/') . '/student/view_report.php?id=' . $reportId;
+                $reportUrl = rtrim(BASE_URL, '/') . '/student/edit_report.php?id=' . $reportId;
                 $body = load_email_template('report_status_updated.php', [
                     'studentName' => $reportDetails['first_name'] . ' ' . $reportDetails['last_name'],
                     'statusLabel' => $statusLabel,
@@ -147,10 +147,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         if ($reportDetails && !empty($reportDetails['email'])) {
             require_once __DIR__ . '/../templates/email/load_template.php';
-            $subject = 'Intervention Recorded for Report #' . $reportIdPost;
-            $body = "<p>Dear " . htmlspecialchars($reportDetails['first_name']) . ",</p>";
-            $body .= "<p>An intervention/counseling session has been recorded for the report you are involved in (Report ID #$reportIdPost). Session date: " . htmlspecialchars($sessionDate) . "</p>";
-            if ($outcome) $body .= "<p>Outcome: " . nl2br(htmlspecialchars($outcome)) . "</p>";
+            
+            $subject = 'Intervention Session Recorded for Report #' . $reportIdPost;
+            $reportTitle = 'Report ID #' . $reportIdPost;
+            
+            $body = load_email_template('intervention_added.php', [
+                'studentName' => $reportDetails['first_name'],
+                'reportTitle' => $reportTitle,
+                'sessionDate' => $sessionDate,
+                'counselorName' => $counselor,
+                'notes' => $notes,
+                'outcome' => $outcome,
+                'appName' => $reportDetails['from_name'] ?? APP_NAME,
+                'baseUrl' => BASE_URL
+            ]);
+
             try {
                 sendMail($reportDetails['email'], $subject, $body, $reportDetails['from_email'] ?? null, $reportDetails['from_name'] ?? APP_NAME);
             } catch (Exception $e) {

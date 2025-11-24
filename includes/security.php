@@ -69,12 +69,27 @@ function recordFailedAttempt($identifier) {
 
 /**
  * Check if account is locked due to brute force
- * Lock after 5 failed attempts within lockout window
- * Lockout times escalate with more attempts
+ * Lock after 5 failed attempts, with escalating durations
+ * Lockout times: 5 attempts=5min, 10=15min, 15=30min, 20=1hr, 25+=2hrs
  */
 function isAccountLocked($identifier) {
-    $attempts = getFailedAttempts($identifier);
-    return $attempts >= 5;
+    global $db;
+    
+    // Get attempts in last 2 hours (covers all escalated lockouts)
+    $result = $db->fetchOne(
+        "SELECT COUNT(*) as count FROM login_attempts WHERE identifier = ? AND attempt_type = 'failed' AND created_at > DATE_SUB(NOW(), INTERVAL 2 HOUR)",
+        [$identifier]
+    );
+    $attempts = intval($result['count'] ?? 0);
+    
+    // Not enough attempts to be locked
+    if ($attempts < 5) {
+        return false;
+    }
+    
+    // Account has 5+ attempts, check if lockout has expired
+    $timeRemaining = getLockoutTimeRemaining($identifier);
+    return $timeRemaining > 0;
 }
 
 /**
@@ -92,34 +107,42 @@ function getLockoutDuration($attempts) {
 
 /**
  * Get lockout time remaining in seconds
- * Calculates time until the oldest failed attempt is outside the lockout window
+ * Implements escalating lockout: 5 attempts = 5min, 10 = 15min, 15 = 30min, 20 = 1hr, 25+ = 2hrs
+ * Lockout timer resets after expiry and gets longer with each new set of 5 failed attempts
  */
 function getLockoutTimeRemaining($identifier) {
     global $db;
     
-    $attempts = getFailedAttempts($identifier);
+    // Get failed attempts in the last 2 hours (wide window to catch escalated lockouts)
+    $attempts = $db->fetchOne(
+        "SELECT COUNT(*) as count FROM login_attempts WHERE identifier = ? AND attempt_type = 'failed' AND created_at > DATE_SUB(NOW(), INTERVAL 2 HOUR)",
+        [$identifier]
+    );
+    $attempts = intval($attempts['count'] ?? 0);
+    
     if ($attempts < 5) {
         return 0; // Account not locked
     }
     
-    // Get the oldest failed attempt within the lockout window
+    // Get the oldest failed attempt in the last 2 hours
     $result = $db->fetchOne(
         "SELECT MIN(created_at) as oldest_attempt FROM login_attempts WHERE identifier = ? AND attempt_type = 'failed' AND created_at > DATE_SUB(NOW(), INTERVAL 2 HOUR)",
         [$identifier]
     );
     
     if (!$result || !$result['oldest_attempt']) {
-        return 0;
+        return 0; // No attempts found = unlocked
     }
     
-    // Calculate lockout duration based on current attempt count
+    // Get the lockout duration based on attempt count
     $lockoutDuration = getLockoutDuration($attempts);
     
-    // Calculate seconds until lockout expires
+    // Calculate when lockout expires
     $oldestTime = strtotime($result['oldest_attempt']);
     $lockoutExpires = $oldestTime + $lockoutDuration;
     $secondsRemaining = $lockoutExpires - time();
     
+    // Return remaining time, but never less than 0
     return max(0, $secondsRemaining);
 }
 
