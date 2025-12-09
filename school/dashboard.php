@@ -12,7 +12,8 @@ $stats = [
     'pending_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'submitted'", [$schoolId])['count'],
     'under_investigation' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'under_investigation'", [$schoolId])['count'],
     'verified' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'verified'", [$schoolId])['count'],
-    'rejected' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'rejected'", [$schoolId])['count']
+    'rejected' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'rejected'", [$schoolId])['count'],
+    'referred_to_mswd' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE school_id = ? AND status = 'referred_to_mswd'", [$schoolId])['count']
 ];
 // Count students registered to this school
 $stats['students'] = $db->fetchOne("SELECT COUNT(*) as count FROM users WHERE school_id = ? AND role = 'student'", [$schoolId])['count'];
@@ -183,56 +184,74 @@ require_once '../includes/header.php';
             </div>
         </div>
         
-        <!-- Status Distribution -->
+        <!-- Report Status Distribution -->
         <div class="card mb-4">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <i class="fas fa-chart-pie me-2"></i>Status Distribution
+                    <i class="fas fa-chart-pie me-2"></i>Report Distribution
                 </h6>
             </div>
             <div class="card-body">
+                <?php
+                $total = $stats['total_reports'] > 0 ? $stats['total_reports'] : 1;
+                $pending_percent = ($stats['pending_review'] / $total) * 100;
+                $investigation_percent = ($stats['under_investigation'] / $total) * 100;
+                $verified_percent = ($stats['verified'] / $total) * 100;
+                $referred_to_mswd_percent = ($stats['referred_to_mswd'] / $total) * 100;
+                $rejected_percent = ($stats['rejected'] / $total) * 100;
+                ?>
+                <!-- Status distribution progress bars -->
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <small>Verified</small>
-                        <small class="text-success fw-bold"><?php echo $stats['verified']; ?></small>
+                        <small class="text-warning">Pending Review</small>
+                        <small class="text-muted"><?php echo $stats['pending_review']; ?> reports</small>
                     </div>
-                    <div class="progress mb-2" style="height: 6px;">
-                        <div class="progress-bar bg-success" style="width: <?php echo $stats['total_reports'] > 0 ? ($stats['verified'] / $stats['total_reports']) * 100 : 0; ?>%"></div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-warning" style="width: <?php echo $pending_percent; ?>%"></div>
                     </div>
                 </div>
-                
+
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <small>Under Investigation</small>
-                        <small class="text-info fw-bold"><?php echo $stats['under_investigation']; ?></small>
+                        <small class="text-info">Under Investigation</small>
+                        <small class="text-muted"><?php echo $stats['under_investigation']; ?> reports</small>
                     </div>
-                    <div class="progress mb-2" style="height: 6px;">
-                        <div class="progress-bar bg-info" style="width: <?php echo $stats['total_reports'] > 0 ? ($stats['under_investigation'] / $stats['total_reports']) * 100 : 0; ?>%"></div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-info" style="width: <?php echo $investigation_percent; ?>%"></div>
                     </div>
                 </div>
-                
+           <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <small class="text-black">Referred to MSWD</small>
+                        <small class="text-muted"><?php echo $stats['referred_to_mswd']; ?> reports</small>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-black" style="width: <?php echo $referred_to_mswd_percent; ?>%"></div>
+                    </div>
+                </div>
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <small>Pending</small>
-                        <small class="text-warning fw-bold"><?php echo $stats['pending_review']; ?></small>
+                        <small class="text-success">Verified</small>
+                        <small class="text-muted"><?php echo $stats['verified']; ?> reports</small>
                     </div>
-                    <div class="progress mb-2" style="height: 6px;">
-                        <div class="progress-bar bg-warning" style="width: <?php echo $stats['total_reports'] > 0 ? ($stats['pending_review'] / $stats['total_reports']) * 100 : 0; ?>%"></div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-success" style="width: <?php echo $verified_percent; ?>%"></div>
                     </div>
                 </div>
-                
-                <div class="mb-0">
+           <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <small>Rejected</small>
-                        <small class="text-secondary fw-bold"><?php echo $stats['rejected']; ?></small>
+                        <small class="text-danger">Rejected</small>
+                        <small class="text-muted"><?php echo $stats['rejected']; ?> reports</small>
                     </div>
-                    <div class="progress mb-2" style="height: 6px;">
-                        <div class="progress-bar bg-secondary" style="width: <?php echo $stats['total_reports'] > 0 ? ($stats['rejected'] / $stats['total_reports']) * 100 : 0; ?>%"></div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-danger" style="width: <?php echo $rejected_percent; ?>%"></div>
                     </div>
+                </div>
+                <div class="text-center mt-3">
+                    <small class="text-muted">Total Reports: <?php echo $stats['total_reports']; ?></small>
                 </div>
             </div>
         </div>
-        
         <!-- Monthly Submissions -->
         <?php if (!empty($monthlyStats)): ?>
         <div class="card">

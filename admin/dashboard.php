@@ -10,7 +10,10 @@ $stats = [
     'total_students' => $db->fetchOne("SELECT COUNT(*) as count FROM users WHERE role = 'student' AND status = 'active'")['count'],
     'pending_review' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'submitted'")['count'],
     'under_investigation' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'under_investigation'")['count'],
-    'verified' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'verified'")['count']
+    'verified' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'verified'")['count'],
+    'referred_to_mswd' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'referred_to_mswd'")['count'],
+    'rejected' => $db->fetchOne("SELECT COUNT(*) as count FROM reports WHERE status = 'rejected'")['count']
+
 ];
 
 // Get recent activity
@@ -28,7 +31,10 @@ $recentReports = $db->fetchAll(
 $schoolStats = $db->fetchAll(
     "SELECT s.name, s.id, COUNT(r.id) as report_count,
             SUM(CASE WHEN r.status = 'verified' THEN 1 ELSE 0 END) as verified_count,
-            SUM(CASE WHEN r.status = 'submitted' THEN 1 ELSE 0 END) as pending_count
+            SUM(CASE WHEN r.status = 'submitted' THEN 1 ELSE 0 END) as pending_count,
+            SUM(CASE WHEN r.status = 'under_investigation' THEN 1 ELSE 0 END) as investigation_count,
+            SUM(CASE WHEN r.status = 'referred_to_mswd' THEN 1 ELSE 0 END) as referred_to_mswd_count,
+            SUM(CASE WHEN r.status = 'rejected' THEN 1 ELSE 0 END) as rejected_count
      FROM schools s 
      LEFT JOIN reports r ON s.id = r.school_id 
      WHERE s.status = 'active'
@@ -188,6 +194,8 @@ require_once '../includes/header.php';
                 $pending_percent = ($stats['pending_review'] / $total) * 100;
                 $investigation_percent = ($stats['under_investigation'] / $total) * 100;
                 $verified_percent = ($stats['verified'] / $total) * 100;
+                $referred_to_mswd_percent = ($stats['referred_to_mswd'] / $total) * 100;
+                $rejected_percent = ($stats['rejected'] / $total) * 100;
                 ?>
                 <!-- Status distribution progress bars -->
                 <div class="mb-3">
@@ -209,7 +217,15 @@ require_once '../includes/header.php';
                         <div class="progress-bar bg-info" style="width: <?php echo $investigation_percent; ?>%"></div>
                     </div>
                 </div>
-
+           <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <small class="text-black">Referred to MSWD</small>
+                        <small class="text-muted"><?php echo $stats['referred_to_mswd']; ?> reports</small>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-black" style="width: <?php echo $referred_to_mswd_percent; ?>%"></div>
+                    </div>
+                </div>
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <small class="text-success">Verified</small>
@@ -219,7 +235,15 @@ require_once '../includes/header.php';
                         <div class="progress-bar bg-success" style="width: <?php echo $verified_percent; ?>%"></div>
                     </div>
                 </div>
-
+           <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <small class="text-danger">Rejected</small>
+                        <small class="text-muted"><?php echo $stats['rejected']; ?> reports</small>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-danger" style="width: <?php echo $rejected_percent; ?>%"></div>
+                    </div>
+                </div>
                 <div class="text-center mt-3">
                     <small class="text-muted">Total Reports: <?php echo $stats['total_reports']; ?></small>
                 </div>
