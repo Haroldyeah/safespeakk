@@ -14,7 +14,7 @@
                         SafeSpeak Anti-Bullying Reporting System | 
                         © <?php echo date('Y'); ?> All Rights Reserved
                     </p>
-                    <a href="https://www.flaticon.com/free-icons/trusted" title="trusted icons">Trusted icons created by Dewi Sari - Flaticon</a>
+                  
                 </div>
             </div>
         </div>

@@ -198,26 +198,6 @@ if (!$report) {
     redirect('view_reports.php', 'Report not found or access denied.', 'error');
 }
 
-// Get all report IDs for the school, ordered to determine next/prev
-$allReportsQuery = "SELECT id FROM reports WHERE school_id = ? AND deleted_at IS NULL ORDER BY submission_date DESC, id DESC";
-$allReportIds = $db->fetchAll($allReportsQuery, [$schoolId]);
-$allReportIds = array_map(fn($r) => (int)$r['id'], $allReportIds);
-
-$currentReportIndex = array_search($reportId, $allReportIds);
-$prevReportId = null;
-$nextReportId = null;
-
-if ($currentReportIndex !== false) {
-    // Previous report (newer submission)
-    if ($currentReportIndex > 0) {
-        $prevReportId = $allReportIds[$currentReportIndex - 1];
-    }
-    // Next report (older submission)
-    if ($currentReportIndex < count($allReportIds) - 1) {
-        $nextReportId = $allReportIds[$currentReportIndex + 1];
-    }
-}
-
 require_once '../includes/header.php';
 ?>
 
@@ -236,17 +216,9 @@ require_once '../includes/header.php';
         </h1>
     </div>
     <div class="col-auto">
-        <div class="btn-group">
-            <a href="?id=<?php echo $prevReportId; ?>" class="btn btn-outline-secondary <?php if (!$prevReportId) echo 'disabled'; ?>">
-                <i class="fas fa-chevron-left"></i> Prev Report
-            </a>
-            <a href="view_reports.php" class="btn btn-outline-primary">
-                <i class="fas fa-list me-1"></i>Back to List
-            </a>
-            <a href="?id=<?php echo $nextReportId; ?>" class="btn btn-outline-secondary <?php if (!$nextReportId) echo 'disabled'; ?>">
-                Next Report <i class="fas fa-chevron-right"></i>
-            </a>
-        </div>
+        <a href="view_reports.php" class="btn btn-outline-primary">
+            <i class="fas fa-arrow-left me-1"></i>Back to Reports
+        </a>
     </div>
 </div>
 

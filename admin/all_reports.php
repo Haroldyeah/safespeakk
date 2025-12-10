@@ -88,6 +88,28 @@ $reports = $db->fetchAll(
     $params
 );
 
+// Get all report IDs for next/prev navigation
+$allReportIdsResult = $db->fetchAll(
+    "SELECT r.id FROM reports r 
+     JOIN users u ON r.student_id = u.id 
+     JOIN schools s_report ON r.school_id = s_report.id 
+     LEFT JOIN schools s_user ON u.school_id = s_user.id 
+     WHERE $whereClause 
+     ORDER BY $sortBy $sortOrder",
+    $params
+);
+$allReportIds = array_column($allReportIdsResult, 'id');
+
+$prevReportId = null;
+$nextReportId = null;
+if ($viewReportId && !empty($allReportIds)) {
+    $currentReportIndex = array_search($viewReportId, $allReportIds);
+    if ($currentReportIndex !== false) {
+        $prevReportId = $currentReportIndex > 0 ? $allReportIds[$currentReportIndex - 1] : null;
+        $nextReportId = $currentReportIndex < (count($allReportIds) - 1) ? $allReportIds[$currentReportIndex + 1] : null;
+    }
+}
+
 // Get schools for filter dropdown
 $schools = $db->fetchAll("SELECT id, name FROM schools WHERE status = 'active' ORDER BY name");
 
@@ -109,37 +131,6 @@ if ($viewReportId) {
             "SELECT * FROM report_evidence WHERE report_id = ?",
             [$viewReportId]
         );
-
-        // Get all filtered report IDs for navigation
-        $allReportIdsQuery = "SELECT r.id FROM reports r JOIN users u ON r.student_id = u.id JOIN schools s_report ON r.school_id = s_report.id WHERE $whereClause ORDER BY $sortBy $sortOrder";
-        $allFilteredReportIds = $db->fetchAll($allReportIdsQuery, $params);
-        $allFilteredReportIds = array_map(fn($r) => (int)$r['id'], $allFilteredReportIds);
-
-        $currentReportIndex = array_search($viewReportId, $allFilteredReportIds);
-        $prevReportId = null;
-        $nextReportId = null;
-
-        if ($currentReportIndex !== false) {
-            // Previous report in the list
-            if ($currentReportIndex > 0) {
-                $prevReportId = $allFilteredReportIds[$currentReportIndex - 1];
-            }
-            // Next report in the list
-            if ($currentReportIndex < count($allFilteredReportIds) - 1) {
-                $nextReportId = $allFilteredReportIds[$currentReportIndex + 1];
-            }
-        }
-        
-        // Query string for navigation links
-        $queryString = http_build_query([
-            'search' => $search,
-            'status' => $statusFilter,
-            'school' => $schoolFilter,
-            'severity' => $severityFilter,
-            'sort' => $sortBy,
-            'order' => $sortOrder,
-            'page' => $page,
-        ]);
     }
 }
 
@@ -184,7 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 require_once __DIR__ . '/../templates/email/load_template.php';
                 $statusLabel = ucfirst(str_replace('_', ' ', $newStatus));
-                $reportUrl = rtrim(BASE_URL, '/') . '/student/my_reports.php?id=' . $reportId;
+                $reportUrl = rtrim(BASE_URL, '/') . '/student/view_report.php?id=' . $reportId;
                 $body = load_email_template('report_status_updated.php', [
                     'studentName' => $reportDetails['first_name'] . ' ' . $reportDetails['last_name'],
                     'statusLabel' => $statusLabel,
@@ -209,10 +200,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             logActivity($db, $_SESSION['user_id'], 'admin', 'update_report_status', "Updated report #$reportId status to $newStatus");
+            $_SESSION['success'] = "Report #{$reportId} status updated to '{$statusLabel}'.";
             echo json_encode(['success' => true, 'message' => 'Status updated successfully']);
             exit;
         } else {
             echo json_encode(['success' => false, 'message' => 'Failed to update status']);
+            $_SESSION['error'] = "Failed to update status for report #{$reportId}.";
             exit;
         }
     }
@@ -243,9 +236,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         if ($deletedCount > 0) {
+            $_SESSION['success'] = "$deletedCount report(s) have been successfully deleted.";
             echo json_encode(['success' => true, 'message' => "$deletedCount report(s) deleted successfully"]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Failed to delete reports']);
+            $_SESSION['error'] = 'No reports were deleted. An error may have occurred.';
         }
         exit;
     }
@@ -663,47 +658,34 @@ require_once '../includes/header.php';
                 <div class="card-footer">
                     <nav aria-label="Reports pagination">
                         <ul class="pagination pagination-sm mb-0 justify-content-center">
-                            <?php
-                            $queryString = http_build_query([
-                                'search' => $search,
-                                'status' => $statusFilter,
-                                'school' => $schoolFilter,
-                                'severity' => $severityFilter,
-                                'sort' => $sortBy,
-                                'order' => $sortOrder
-                            ]);
-                            ?>
-                            <!-- First Page -->
-                            <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                <a class="page-link" href="?page=1&<?php echo $queryString; ?>">First</a>
-                            </li>
-                            
-                            <!-- Back Button -->
-                            <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                <a class="page-link" href="?page=<?php echo $page - 1; ?>&<?php echo $queryString; ?>">Back</a>
-                            </li>
+                            <?php if ($page > 1): ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=<?php echo $page - 1; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>&sort=<?php echo urlencode($sortBy); ?>&order=<?php echo urlencode($sortOrder); ?>">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
                             
                             <?php
                             $startPage = max(1, $page - 2);
                             $endPage = min($totalPages, $page + 2);
+                            
                             for ($i = $startPage; $i <= $endPage; $i++):
                             ?>
                                 <li class="page-item <?php echo $i === $page ? 'active' : ''; ?>">
-                                    <a class="page-link" href="?page=<?php echo $i; ?>&<?php echo $queryString; ?>">
+                                    <a class="page-link" href="?page=<?php echo $i; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>&sort=<?php echo urlencode($sortBy); ?>&order=<?php echo urlencode($sortOrder); ?>">
                                         <?php echo $i; ?>
                                     </a>
                                 </li>
                             <?php endfor; ?>
                             
-                            <!-- Next Button -->
-                            <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                <a class="page-link" href="?page=<?php echo $page + 1; ?>&<?php echo $queryString; ?>">Next</a>
-                            </li>
-
-                            <!-- Last Page -->
-                            <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                <a class="page-link" href="?page=<?php echo $totalPages; ?>&<?php echo $queryString; ?>">Last</a>
-                            </li>
+                            <?php if ($page < $totalPages): ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=<?php echo $page + 1; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>&sort=<?php echo urlencode($sortBy); ?>&order=<?php echo urlencode($sortOrder); ?>">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
                         </ul>
                     </nav>
                 </div>
@@ -718,20 +700,8 @@ require_once '../includes/header.php';
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <div class="d-flex align-items-center">
-                    <!-- Previous Report Button -->
-                    <a href="?id=<?php echo $prevReportId; ?>&<?php echo $queryString; ?>" class="btn btn-outline-primary btn-sm me-2 <?php if (!$prevReportId) echo 'disabled'; ?>" title="Previous Report">
-                        <i class="fas fa-chevron-left"></i>
-                    </a>
-                    
-                    <h5 class="modal-title mb-0">Bullying Report Details - <?php echo htmlspecialchars($viewReport['title']); ?></h5>
-                    
-                    <!-- Next Report Button -->
-                    <a href="?id=<?php echo $nextReportId; ?>&<?php echo $queryString; ?>" class="btn btn-outline-primary btn-sm ms-2 <?php if (!$nextReportId) echo 'disabled'; ?>" title="Next Report">
-                        <i class="fas fa-chevron-right"></i>
-                    </a>
-                </div>
-                <a href="all_reports.php?<?php echo $queryString; ?>" class="btn-close"></a>
+                <h5 class="modal-title">Bullying Report Details - <?php echo htmlspecialchars($viewReport['title']); ?></h5>
+                <a href="all_reports.php" class="btn-close"></a>
             </div>
             <div class="modal-body">
                 <div class="row">
@@ -1046,31 +1016,29 @@ require_once '../includes/header.php';
                 </div>
             </div>
             <div class="modal-footer">
-                <a href="all_reports.php" class="btn btn-secondary">Close</a>
+                <div class="w-100 d-flex justify-content-between">
+                    <div>
+                        <?php if ($prevReportId): ?>
+                            <a href="?id=<?php echo $prevReportId; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>&sort=<?php echo urlencode($sortBy); ?>&order=<?php echo urlencode($sortOrder); ?>" class="btn btn-outline-primary">
+                                <i class="fas fa-arrow-left me-1"></i>Previous Report
+                            </a>
+                        <?php endif; ?>
+                        <?php if ($nextReportId): ?>
+                            <a href="?id=<?php echo $nextReportId; ?>&search=<?php echo urlencode($search); ?>&status=<?php echo urlencode($statusFilter); ?>&school=<?php echo urlencode($schoolFilter); ?>&sort=<?php echo urlencode($sortBy); ?>&order=<?php echo urlencode($sortOrder); ?>" class="btn btn-outline-primary">
+                                Next Report<i class="fas fa-arrow-right ms-1"></i>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                    <a href="all_reports.php" class="btn btn-secondary">Close</a>
+                </div>
             </div>
         </div>
     </div>
 </div>
 <div class="modal-backdrop fade show"></div>
+<?php endif; ?>
 
 <script>
-// Keyboard navigation for report modal
-document.addEventListener('keydown', function(e) {
-    if (document.getElementById('reportModal')) {
-        if (e.key === 'ArrowLeft') {
-            const prevBtn = document.querySelector('a[title="Previous Report"]');
-            if (prevBtn && !prevBtn.classList.contains('disabled')) {
-                prevBtn.click();
-            }
-        } else if (e.key === 'ArrowRight') {
-            const nextBtn = document.querySelector('a[title="Next Report"]');
-            if (nextBtn && !nextBtn.classList.contains('disabled')) {
-                nextBtn.click();
-            }
-        }
-    }
-});
-
 function updateStatus(reportId, newStatus) {
     let confirmMessage = `Are you sure you want to ${newStatus.replace('_', ' ')} this report?`;
     
@@ -1247,66 +1215,6 @@ document.addEventListener('DOMContentLoaded', function() {
     border-color: #6c757d;
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 10h8'/%3e%3c/svg%3e");
 }
-
-#prevReportBtn.disabled,
-#nextReportBtn.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.modal-header .btn-group {
-    margin-right: 10px;
-}
 </style>
-<?php endif; ?>
-
-<!-- Pagination -->
-<?php if ($totalPages > 1): ?>
-<div class="d-flex justify-content-center my-4">
-    <nav aria-label="Reports pagination">
-        <ul class="pagination">
-            <?php
-            $queryString = http_build_query([
-                'search' => $search,
-                'status' => $statusFilter,
-                'school' => $schoolFilter,
-                'severity' => $severityFilter,
-                'sort' => $sortBy,
-                'order' => $sortOrder
-            ]);
-            ?>
-            <!-- First Page -->
-            <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                <a class="page-link" href="?page=1&<?php echo $queryString; ?>">First</a>
-            </li>
-            
-            <!-- Back Button -->
-            <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                <a class="page-link" href="?page=<?php echo $page - 1; ?>&<?php echo $queryString; ?>">Back</a>
-            </li>
-            
-            <?php
-            $startPage = max(1, $page - 2);
-            $endPage = min($totalPages, $page + 2);
-            for ($i = $startPage; $i <= $endPage; $i++):
-            ?>
-                <li class="page-item <?php echo $i === $page ? 'active' : ''; ?>">
-                    <a class="page-link" href="?page=<?php echo $i; ?>&<?php echo $queryString; ?>"><?php echo $i; ?></a>
-                </li>
-            <?php endfor; ?>
-            
-            <!-- Next Button -->
-            <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                <a class="page-link" href="?page=<?php echo $page + 1; ?>&<?php echo $queryString; ?>">Next</a>
-            </li>
-
-            <!-- Last Page -->
-            <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                <a class="page-link" href="?page=<?php echo $totalPages; ?>&<?php echo $queryString; ?>">Last</a>
-            </li>
-        </ul>
-    </nav>
-</div>
-<?php endif; ?>
 
 <?php require_once '../includes/footer.php'; ?>
